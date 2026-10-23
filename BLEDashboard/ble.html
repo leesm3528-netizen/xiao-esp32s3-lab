@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XIAO BLE 대시보드</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --text:#1d1f23; --muted:#6b7280; --on:#f59e0b; --touch:#10b981; --ble:#3b82f6; --off:#d1d5db; --err:#ef4444; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111317; --card:#1b1e24; --text:#e8eaed; --muted:#9aa0a6; --off:#3a3f47; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:480px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+  .sub.err { color:var(--err); }
+  .sub.ok { color:var(--ble); }
+  .card { background:var(--card); border-radius:14px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .label { font-size:15px; font-weight:600; }
+  .state { font-size:13px; color:var(--muted); margin-top:4px; }
+  .dot { width:56px; height:56px; flex:none; border-radius:50%; background:var(--off); transition:background .15s, box-shadow .15s; }
+  .dot.led { background:var(--on); box-shadow:0 0 24px var(--on); }
+  .dot.touch { background:var(--touch); box-shadow:0 0 24px var(--touch); }
+  .btns { display:flex; gap:10px; margin-top:16px; }
+  button { flex:1; padding:14px; font-size:16px; font-weight:600; border:0; border-radius:10px; cursor:pointer; background:var(--off); color:var(--text); font-family:inherit; }
+  button.primary { background:var(--on); color:#fff; }
+  button.connect { background:var(--ble); color:#fff; width:100%; }
+  button:disabled { opacity:.45; cursor:default; }
+  .value { font-size:32px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:12px; }
+  .bar { height:8px; border-radius:4px; background:var(--off); margin-top:10px; overflow:hidden; }
+  .bar > div { height:100%; width:0; background:var(--touch); transition:width .15s; }
+  .meta { font-size:12px; color:var(--muted); margin-top:8px; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <h1>XIAO ESP32-S3 · BLE</h1>
+  <div class="sub" id="conn">연결 안 됨</div>
+
+  <div class="card">
+    <button class="connect" id="connectBtn" onclick="connectOrDisconnect()">블루투스로 연결</button>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div><div class="label">LED (GPIO21)</div><div class="state" id="ledState">-</div></div>
+      <div class="dot" id="ledDot"></div>
+    </div>
+    <div class="btns">
+      <button class="primary ctl" onclick="setLed(true)" disabled>켜기</button>
+      <button class="ctl" onclick="setLed(false)" disabled>끄기</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div><div class="label">터치센서 (D0)</div><div class="state" id="touchState">-</div></div>
+      <div class="dot" id="touchDot"></div>
+    </div>
+    <div class="value" id="touchValue">-</div>
+    <div class="bar"><div id="touchBar"></div></div>
+    <div class="meta" id="touchMeta">-</div>
+  </div>
+</main>
+<script>
+const SERVICE_UUID = 'd429d54e-a936-468d-8afb-8bb144cdb6a9';
+const TOUCH_UUID = 'cc6ffe3a-db7f-4895-8b62-6aefb65010e5';
+const LED_UUID = '6083a55f-c5c1-4375-9d96-053e54580212';
+
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+let device = null;
+let ledChar = null;
+let busy = false;
+
+function setConn(text, cls) {
+  const c = document.getElementById('conn');
+  c.textContent = text;
+  c.className = 'sub' + (cls ? ' ' + cls : '');
+}
+
+function setControls(on) {
+  document.querySelectorAll('.ctl').forEach(b => b.disabled = !on);
+  document.getElementById('connectBtn').textContent = on ? '연결 끊기' : '블루투스로 연결';
+}
+
+function renderLed(text) {
+  const on = text.trim() === '1';
+  document.getElementById('ledState').textContent = on ? '켜짐' : '꺼짐';
+  document.getElementById('ledDot').className = 'dot' + (on ? ' led' : '');
+}
+
+// "touched,value,baseline"
+function renderTouch(text) {
+  const [t, value, baseline] = text.split(',').map(Number);
+  const touched = t === 1;
+  document.getElementById('touchState').textContent = touched ? '터치 중' : '터치 안 함';
+  document.getElementById('touchDot').className = 'dot' + (touched ? ' touch' : '');
+  document.getElementById('touchValue').textContent = value.toLocaleString();
+  // bar: baseline = 0%, threshold (baseline x1.3) = 100%
+  const pct = Math.max(0, Math.min(100, (value - baseline) / (baseline * 0.3) * 100));
+  document.getElementById('touchBar').style.width = pct + '%';
+  document.getElementById('touchMeta').textContent = '기준 ' + baseline.toLocaleString() + ' · 터치 판정 ' + Math.round(baseline * 1.3).toLocaleString() + ' 이상';
+}
+
+async function connect() {
+  if (!navigator.bluetooth) {
+    setConn('이 브라우저는 Web Bluetooth를 지원하지 않습니다. 안드로이드 Chrome(아이폰은 Bluefy 앱)으로 여세요.', 'err');
+    return;
+  }
+  try {
+    setConn('기기 선택 중…');
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    setConn(device.name + '에 연결 중…');
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const touchChar = await service.getCharacteristic(TOUCH_UUID);
+    ledChar = await service.getCharacteristic(LED_UUID);
+
+    renderLed(decoder.decode(await ledChar.readValue()));
+    renderTouch(decoder.decode(await touchChar.readValue()));
+
+    ledChar.addEventListener('characteristicvaluechanged', e => renderLed(decoder.decode(e.target.value)));
+    touchChar.addEventListener('characteristicvaluechanged', e => renderTouch(decoder.decode(e.target.value)));
+    await ledChar.startNotifications();
+    await touchChar.startNotifications();
+
+    setConn('연결됨 · ' + device.name, 'ok');
+    setControls(true);
+  } catch (e) {
+    if (e.name === 'NotFoundError') setConn('기기를 선택하지 않았습니다');
+    else setConn('연결 실패: ' + e.message + ' · 보드 전원과 휴대폰 블루투스를 확인하세요', 'err');
+    if (device && device.gatt.connected) device.gatt.disconnect();
+    setControls(false);
+  }
+}
+
+function onDisconnected() {
+  ledChar = null;
+  setControls(false);
+  setConn('연결 끊김 · 다시 연결하려면 버튼을 누르세요', 'err');
+}
+
+function connectOrDisconnect() {
+  if (device && device.gatt.connected) device.gatt.disconnect();
+  else connect();
+}
+
+async function setLed(on) {
+  if (!ledChar || busy) return;
+  busy = true;
+  try {
+    await ledChar.writeValue(encoder.encode(on ? '1' : '0'));
+    renderLed(on ? '1' : '0');
+  } catch (e) {
+    setConn('LED 변경 실패: ' + e.message, 'err');
+  } finally {
+    busy = false;
+  }
+}
+</script>
+</body>
+</html>

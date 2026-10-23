@@ -1,0 +1,11 @@
+# credentials
+secrets.h
+WIFI.md
+
+# local tool settings
+.claude/
+.mcp.json
+
+# build output
+build/
+*.bin
