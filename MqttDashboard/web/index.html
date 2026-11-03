@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XIAO MQTT</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --text: #1d2330; --muted: #6b7280; --line: #e3e6eb;
+    --accent: #2563eb; --on: #f59e0b; --ok: #16a34a; --bad: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151b; --card: #1b1f27; --text: #e7e9ee; --muted: #9aa1ad; --line: #2b313c;
+            --accent: #60a5fa; --on: #fbbf24; --ok: #4ade80; --bad: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+          background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .wide { grid-column: 1 / -1; }
+  .big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .sub { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .touch-state { display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 6px; font-weight: 600;
+                 background: var(--line); color: var(--muted); }
+  .touch-state.on { background: var(--accent); color: #fff; }
+  .led { display: flex; align-items: center; gap: 16px; }
+  .bulb { width: 56px; height: 56px; border-radius: 50%; background: var(--line); transition: .15s; flex: none; }
+  .bulb.on { background: var(--on); box-shadow: 0 0 24px var(--on); }
+  .btns { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line);
+           background: var(--card); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  canvas { width: 100%; height: 160px; display: block; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input { font: inherit; flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line);
+          background: var(--bg); color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.val { max-width: 260px; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; }
+  code { font-family: ui-monospace, Consolas, monospace; }
+  #log { height: 160px; overflow: auto; margin: 0; font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--muted); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>XIAO ESP32-S3 · MQTT</h1>
+    <div class="pills">
+      <span class="pill"><span class="dot" id="brokerDot"></span><span id="brokerTxt">브로커 연결 중</span></span>
+      <span class="pill"><span class="dot" id="boardDot"></span><span id="boardTxt">보드 상태 모름</span></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>터치 센서 (D0)</h2>
+      <div class="big" id="touchVal">–</div>
+      <div class="sub">기준값 <span id="baseVal">–</span> · 임계값 <span id="threshVal">–</span></div>
+      <span class="touch-state" id="touchState">대기</span>
+    </section>
+
+    <section class="card">
+      <h2>LED (GPIO21)</h2>
+      <div class="led">
+        <div class="bulb" id="bulb"></div>
+        <div><div class="big" id="ledTxt">–</div><div class="sub">보드가 보고한 상태</div></div>
+      </div>
+      <div class="btns">
+        <button class="primary" data-cmd="toggle">토글</button>
+        <button data-cmd="on">켜기</button>
+        <button data-cmd="off">끄기</button>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>터치 값 추이 (최근 30초)</h2>
+      <canvas id="chart"></canvas>
+    </section>
+
+    <section class="card wide">
+      <h2>퍼블리셔 (메시지를 보낸 기기)</h2>
+      <div class="sub" style="margin-bottom:8px">브로커 접속 클라이언트 <span id="clientsTxt">–</span>개 · 토픽 첫 단어로 기기를 구분 (예: <code>phone/hello</code> → phone)</div>
+      <div style="overflow-x:auto">
+        <table id="devs">
+          <thead><tr><th>기기</th><th>상태</th><th>최근 토픽</th><th>값</th><th>수신</th></tr></thead>
+          <tbody><tr><td colspan="5" class="sub">아직 메시지 없음</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>연결</h2>
+      <div class="row">
+        <input id="url" spellcheck="false">
+        <button id="connectBtn">다시 연결</button>
+      </div>
+      <div class="sub" style="margin:8px 0">보드 IP <span id="ipTxt">–</span> · RSSI <span id="rssiTxt">–</span></div>
+      <pre id="log"></pre>
+    </section>
+  </div>
+</main>
+
+<script src="mqtt.min.js"></script>
+<script>
+const T = { status: 'xiao/status', info: 'xiao/info', touch: 'xiao/touch', led: 'xiao/led', ledSet: 'xiao/led/set' };
+const $ = id => document.getElementById(id);
+const host = location.hostname || 'localhost';
+$('url').value = localStorage.getItem('mqttUrl') || `ws://${host}:9001`;
+
+let client = null;
+const samples = [];            // {t, value, baseline}
+const WINDOW_MS = 30000;
+
+function log(msg) {
+  const el = $('log');
+  const line = new Date().toLocaleTimeString() + '  ' + msg + '\n';
+  el.textContent = (line + el.textContent).slice(0, 6000);
+}
+function setPill(dot, txt, state, text) {
+  $(dot).className = 'dot' + (state === true ? ' ok' : state === false ? ' bad' : '');
+  $(txt).textContent = text;
+}
+function setButtons(enabled) {
+  document.querySelectorAll('[data-cmd]').forEach(b => b.disabled = !enabled);
+}
+
+function connect() {
+  if (client) client.end(true);
+  const url = $('url').value.trim();
+  try { localStorage.setItem('mqttUrl', url); } catch (e) {}
+  setPill('brokerDot', 'brokerTxt', null, '브로커 연결 중');
+  setButtons(false);
+  client = mqtt.connect(url, { clientId: 'web-' + Math.random().toString(16).slice(2, 8), reconnectPeriod: 2000 });
+
+  client.on('connect', () => {
+    setPill('brokerDot', 'brokerTxt', true, '브로커 연결됨');
+    setButtons(true);
+    // '#' = every topic (phone etc.), $SYS topics must be subscribed separately
+    client.subscribe(['#', '$SYS/broker/clients/connected']);
+    log('connected ' + url);
+  });
+  client.on('reconnect', () => setPill('brokerDot', 'brokerTxt', null, '재연결 중'));
+  client.on('close', () => { setPill('brokerDot', 'brokerTxt', false, '브로커 끊김'); setButtons(false); });
+  client.on('error', e => log('error ' + e.message));
+  client.on('message', onMessage);
+}
+
+// publishers, keyed by the first topic level: {status, topic, payload, t, retained, count}
+const devices = new Map();
+const ONLINE_MS = 15000;
+
+function trackDevice(topic, s, retained) {
+  if (topic.endsWith('/set')) return;  // commands (from web/phone), not the target device's data
+  const name = topic.split('/')[0];
+  const d = devices.get(name) || { count: 0 };
+  if (topic === name + '/status') d.status = s;
+  Object.assign(d, { topic, payload: s, retained, t: retained ? d.t || null : Date.now(), count: d.count + 1 });
+  devices.set(name, d);
+}
+
+function ago(t) {
+  if (!t) return '보관된 값';
+  const s = Math.round((Date.now() - t) / 1000);
+  return s < 1 ? '방금' : s + '초 전';
+}
+
+function renderDevices() {
+  const body = $('devs').tBodies[0];
+  if (!devices.size) return;
+  body.replaceChildren();
+  for (const [name, d] of [...devices].sort()) {
+    const live = d.t && Date.now() - d.t < ONLINE_MS;
+    const online = d.status ? d.status === 'online' : live;
+    const label = d.status || (live ? '활동 중' : '조용함');
+    const tr = body.insertRow();
+    const cell = (text, cls) => { const c = tr.insertCell(); c.textContent = text; if (cls) c.className = cls; return c; };
+    cell(name).style.fontWeight = '600';
+    const st = tr.insertCell();
+    st.innerHTML = '<span class="tag"><span class="dot"></span><span></span></span>';
+    st.querySelector('.dot').className = 'dot' + (online ? ' ok' : d.status ? ' bad' : '');
+    st.querySelector('span span:last-child').textContent = label;
+    cell(d.topic);
+    cell(d.payload, 'val').title = d.payload;
+    cell(ago(d.t) + ` · ${d.count}건`, 'sub');
+  }
+}
+setInterval(renderDevices, 500);
+
+function onMessage(topic, payload, packet) {
+  const s = payload.toString();
+  if (topic === '$SYS/broker/clients/connected') { $('clientsTxt').textContent = s; return; }
+  trackDevice(topic, s, packet && packet.retain);
+  if (topic === T.touch) {
+    let d; try { d = JSON.parse(s); } catch (e) { return; }
+    $('touchVal').textContent = d.value.toLocaleString();
+    $('baseVal').textContent = d.baseline.toLocaleString();
+    $('threshVal').textContent = Math.round(d.baseline * 1.3).toLocaleString();
+    $('touchState').textContent = d.touched ? '터치됨' : '대기';
+    $('touchState').className = 'touch-state' + (d.touched ? ' on' : '');
+    samples.push({ t: Date.now(), value: d.value, baseline: d.baseline });
+    return;
+  }
+  log(`${topic}  ${s}`);
+  if (topic === T.led) {
+    const on = s === '1';
+    $('bulb').className = 'bulb' + (on ? ' on' : '');
+    $('ledTxt').textContent = on ? 'ON' : 'OFF';
+  } else if (topic === T.status) {
+    setPill('boardDot', 'boardTxt', s === 'online', s === 'online' ? '보드 온라인' : '보드 오프라인');
+  } else if (topic === T.info) {
+    try { const d = JSON.parse(s); $('ipTxt').textContent = d.ip; $('rssiTxt').textContent = d.rssi + ' dBm'; } catch (e) {}
+  }
+}
+
+document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
+  if (client && client.connected) client.publish(T.ledSet, b.dataset.cmd);
+}));
+$('connectBtn').addEventListener('click', connect);
+
+// simple line chart: touch value (solid) and threshold (dashed)
+function draw() {
+  const cv = $('chart'), dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const now = Date.now();
+  while (samples.length && samples[0].t < now - WINDOW_MS) samples.shift();
+  if (samples.length > 1) {
+    const css = getComputedStyle(document.documentElement);
+    let lo = Infinity, hi = -Infinity;
+    for (const p of samples) { lo = Math.min(lo, p.value, p.baseline); hi = Math.max(hi, p.value, p.baseline * 1.3); }
+    const pad = (hi - lo) * 0.1 || 100; lo -= pad; hi += pad;
+    const x = t => (1 - (now - t) / WINDOW_MS) * w;
+    const y = v => h - (v - lo) / (hi - lo) * h;
+    const line = (key, color, dash, k = 1) => {
+      ctx.beginPath(); ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = 2;
+      samples.forEach((p, i) => i ? ctx.lineTo(x(p.t), y(p[key] * k)) : ctx.moveTo(x(p.t), y(p[key] * k)));
+      ctx.stroke();
+    };
+    line('baseline', css.getPropertyValue('--muted').trim(), [4, 4], 1.3);
+    line('value', css.getPropertyValue('--accent').trim(), []);
+    ctx.setLineDash([]);
+  }
+  requestAnimationFrame(draw);
+}
+
+setButtons(false);
+connect();
+draw();
+</script>
+</body>
+</html>

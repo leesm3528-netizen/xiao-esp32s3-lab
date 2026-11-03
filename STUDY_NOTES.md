@@ -12,6 +12,7 @@
 6. [BLE](#6-ble)
 7. [연결 방식 비교](#7-연결-방식-비교)
 8. [AI 에이전트와 작업하며 배운 것](#8-ai-에이전트와-작업하며-배운-것)
+9. [MQTT (로컬 브로커)](#9-mqtt-로컬-브로커)
 
 ---
 
@@ -256,3 +257,91 @@ await ledChar.writeValue(new TextEncoder().encode('1'));
 - **curl이 통과해도 브라우저는 실패할 수 있다.** 서버 응답과 페이지 스크립트는 따로 확인해야 합니다.
 - **겪은 문제는 규칙으로 남긴다.** [AGENTS.md](AGENTS.md)에 "하지 말 것"으로 적어 두면 다음 작업(사람이든 에이전트든)이 같은 실수를 반복하지 않습니다.
 - **비밀 정보는 처음부터 분리.** Wi-Fi 비밀번호와 장치 시크릿은 `secrets.h`에만 두고 `.gitignore`로 제외했습니다.
+
+---
+
+## 9. MQTT (로컬 브로커)
+
+### 구조
+
+```
+[XIAO] --MQTT 1884-->  [Mosquitto (PC)]  <--WebSocket 9001-- [웹 대시보드]
+                              ^
+                              +--MQTT 1884-- [휴대폰 IoT MQTT Panel]
+```
+
+보드·웹·휴대폰은 서로를 모릅니다. 모두 **브로커 하나에만** 접속하고, 토픽으로 값을 주고받습니다. 그래서 휴대폰 앱을 하나 더 붙여도 보드 코드는 바꿀 필요가 없습니다.
+
+### 토픽 설계
+
+| 토픽 | 보내는 쪽 | 값 | 옵션 |
+|---|---|---|---|
+| `xiao/status` | 보드 | `online` / `offline` | retained, `offline`은 LWT |
+| `xiao/touch` | 보드 | `{"touched":false,"value":17000,"baseline":17000}` | 0.2초마다 + 터치 상태가 바뀔 때 |
+| `xiao/touch/value` | 보드 | `17000` | 앱 위젯용(숫자만) |
+| `xiao/led` | 보드 | `1` / `0` | retained, **실제** LED 상태 |
+| `xiao/led/set` | 웹·휴대폰 | `on` / `off` / `toggle` | 보드가 구독 |
+
+명령(`xiao/led/set`)과 상태(`xiao/led`)를 나눴습니다. 버튼을 눌렀다고 화면을 바로 바꾸지 않고, 보드가 실제로 바꾼 뒤 보낸 상태로 화면을 바꿉니다.
+
+```cpp
+// 보드가 갑자기 꺼지면 브로커가 대신 "offline"을 발행 (LWT)
+mqtt.connect(clientId.c_str(), nullptr, nullptr, "xiao/status", 1, true, "offline");
+mqtt.publish("xiao/status", "online", true);   // retained
+mqtt.subscribe("xiao/led/set");
+```
+
+### 브라우저에서 MQTT
+
+브라우저는 TCP 소켓을 직접 열 수 없어서 브로커에 WebSocket 리스너를 하나 더 엽니다.
+
+```conf
+listener 1884 0.0.0.0
+protocol mqtt
+listener 9001
+protocol websockets
+```
+
+```js
+const client = mqtt.connect(`ws://${location.hostname || 'localhost'}:9001`);
+client.subscribe(['#', '$SYS/broker/clients/connected']);   // 모든 토픽 + 접속 수
+```
+
+페이지를 연 주소의 호스트로 접속하기 때문에, PC에서는 `localhost`, 휴대폰에서는 PC IP로 같은 파일이 그대로 동작합니다.
+
+### `loop()`가 몇 초씩 멈춘 이유: USB 시리얼
+
+XIAO ESP32-S3의 `Serial`은 USB CDC입니다. **PC에서 아무도 COM 포트를 읽지 않으면** 출력 버퍼가 차고, `Serial.printf`가 비워질 때까지 기다리면서 `loop()` 전체가 멈췄습니다. 증상은 "LED가 한 박자 늦게 반영", "터치 메시지가 5초에 6개"였습니다.
+
+찾기 어려웠던 이유는 **시리얼 로그를 보려고 COM 포트를 여는 순간 증상이 사라지기 때문**입니다. 브로커 쪽에서 메시지 도착 시각을 1초 단위로 세고, COM 포트를 연 상태와 닫은 상태를 비교해서 찾았습니다.
+
+```cpp
+Serial.begin(115200);
+Serial.setTxTimeoutMs(0);   // 읽는 쪽이 없으면 기다리지 말고 버린다
+WiFi.setSleep(false);       // 와이파이 절전 끄기 (명령 수신 지연 감소)
+```
+
+| | 고치기 전 | 고친 후 |
+|---|---|---|
+| 터치 메시지 | 5초에 약 6개, 몰렸다 끊김 | 초당 5개 일정 |
+| LED 명령 반영 | 한 박자 늦음 | 1초 안 |
+
+### 휴대폰 앱 (IoT MQTT Panel)
+
+| 패널 | 토픽 | 설정 |
+|---|---|---|
+| Button | `phone/hello` | 값 `hi` → 웹 대시보드 퍼블리셔 표에 phone 표시 |
+| Button | `xiao/led/set` | 값 `toggle` |
+| Slider | `xiao/touch/value` | 15000 ~ 60000 (보드 값 표시용) |
+| LED Indicator | `xiao/led` 또는 `xiao/touch/state` | 켜짐 `1`, 꺼짐 `0` |
+
+앱 위젯은 JSON을 해석하지 못하는 경우가 많아서, 보드가 숫자만 담은 토픽을 따로 발행하게 했습니다.
+
+### 연결 방식 비교에 추가
+
+| | MQTT (로컬) |
+|---|---|
+| 인터넷 | 불필요 (같은 Wi-Fi + PC 브로커) |
+| 휴대폰 동시 접속 | 여러 대 |
+| 지연 | 짧음 (1초 안) |
+| 특징 | 기기끼리 직접 연결하지 않아서 기기를 늘리기 쉽다. 브로커가 꺼지면 전부 멈춘다 |

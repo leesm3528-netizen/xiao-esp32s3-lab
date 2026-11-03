@@ -1,12 +1,13 @@
 # XIAO ESP32-S3 Lab
 
-Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고, 같은 기능을 **Wi-Fi 웹서버 → 클라우드(Supabase) 원격 제어 → 카메라 스트리밍 → AP 모드 → BLE** 순서로 연결 방식을 바꿔 가며 스마트폰에서 제어해 본 학습 기록입니다.
+Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고, 같은 기능을 **Wi-Fi 웹서버 → 클라우드(Supabase) 원격 제어 → 카메라 스트리밍 → AP 모드 → BLE → MQTT** 순서로 연결 방식을 바꿔 가며 스마트폰에서 제어해 본 학습 기록입니다.
 코드는 AI 코딩 에이전트(Claude Code)와 함께 작성했고, `arduino-cli`로 노트북에서 보드에 바로 업로드했습니다.
 
 ![ESP32](https://img.shields.io/badge/ESP32--S3-E7352C?style=flat-square&logo=espressif&logoColor=white)
 ![C++](https://img.shields.io/badge/C++-00599C?style=flat-square&logo=cplusplus&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Bluetooth](https://img.shields.io/badge/BLE-0082FC?style=flat-square&logo=bluetooth&logoColor=white)
+![MQTT](https://img.shields.io/badge/MQTT_(Mosquitto)-660066?style=flat-square&logo=mqtt&logoColor=white)
 ![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-222222?style=flat-square&logo=githubpages&logoColor=white)
 ![arduino-cli](https://img.shields.io/badge/arduino--cli-esp32_3.3.12-00979D?style=flat-square)
 
@@ -16,7 +17,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 
 ---
 
-## 한눈에 보기 — 연결 방식 5가지
+## 한눈에 보기 — 연결 방식 6가지
 
 같은 LED·터치센서를 연결 방식만 바꿔서 제어했습니다.
 
@@ -27,6 +28,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | **카메라 스트리밍** | [SupabaseDashboard](SupabaseDashboard/camera_stream.h) | 필요 없음 (같은 Wi-Fi) | `http://<보드 IP>/` | 3명 동시 시청, 약 24fps(VGA, 1명) |
 | **AP 모드** | [APDashboard](APDashboard/APDashboard.ino) | 없음 | 보드가 띄운 Wi-Fi에 접속 → `http://192.168.4.1/` | 휴대폰 접속, LED 점등 확인 |
 | **BLE** | [BLEDashboard](BLEDashboard/BLEDashboard.ino) | 없음 | [BLE 페이지](https://leesm3528-netizen.github.io/xiao-dashboard/ble.html) 또는 nRF Connect | 휴대폰 연결, LED·터치값 확인 |
+| **MQTT (로컬 브로커)** | [MqttDashboard](MqttDashboard/) | 필요 없음 (같은 Wi-Fi, PC에 Mosquitto) | 브라우저 `http://<PC IP>:8080` 또는 **IoT MQTT Panel** 앱 | 휴대폰 앱이 퍼블리셔로 접속, 앱으로 LED 토글·슬라이더로 터치값 확인 |
 
 ---
 
@@ -75,6 +77,15 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | **Notify** | 휴대폰이 묻지 않아도 보드가 값이 바뀔 때 먼저 보내 준다(0.2초 간격) | [BLEDashboard](BLEDashboard/BLEDashboard.ino) |
 | **Web Bluetooth** | 브라우저에서 BLE 기기에 직접 연결. **HTTPS 필수**, 안드로이드 Chrome 지원(아이폰 Safari 미지원) | [ble.html](BLEDashboard/ble.html) |
 
+### MQTT
+
+| 키워드 | 한 줄 정리 | 파일 |
+|---|---|---|
+| **브로커 (Mosquitto)** | 메시지 우체국. 보드·웹·휴대폰은 서로 직접 연결하지 않고 PC의 브로커에만 붙는다 | [mosquitto.conf](MqttDashboard/broker/mosquitto.conf) |
+| **토픽 · 발행 · 구독** | `xiao/touch`처럼 주소(토픽)에 값을 **발행(publish)** 하면, 그 토픽을 **구독(subscribe)** 한 모두가 받는다. `#`은 "전부" | [MqttDashboard.ino](MqttDashboard/MqttDashboard.ino) |
+| **retained · LWT** | `retained`는 마지막 값을 브로커가 기억해 새로 접속한 쪽에 바로 준다. LWT(유언)는 보드가 갑자기 끊기면 브로커가 대신 `offline`을 발행 | [MqttDashboard.ino](MqttDashboard/MqttDashboard.ino) |
+| **WebSocket 리스너** | 브라우저는 MQTT(TCP)로 직접 못 붙어서 브로커에 WebSocket 포트(9001)를 따로 열고 `mqtt.js`로 접속 | [index.html](MqttDashboard/web/index.html) |
+
 ---
 
 ## 진행 과정 · 1일차 (10/23)
@@ -86,6 +97,13 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 5. **다른 PC에서 성공한 구조로 교체** — 카메라 서버를 `WiFiServer` + 시청자별 작업 구조로 바꿔 3명 동시 시청과 긴 헤더 문제를 해결하고, 비밀번호는 `secrets.h`로 분리했습니다.
 6. **AP 모드** — 인터넷 없이 보드가 Wi-Fi를 띄우고 휴대폰이 접속해서 LED·터치값을 다뤘습니다.
 7. **BLE** — 휴대폰과 블루투스로 직접 연결해 터치값 읽기와 LED 제어를 했습니다.
+
+## 진행 과정 · 2일차 (11/2 ~ 11/3)
+
+8. **MQTT 로컬 대시보드** — PC에 설치한 Mosquitto를 브로커로 쓰고, 보드는 터치값을 발행하고 LED 명령을 구독합니다. 웹 대시보드는 터치값·30초 그래프·LED 버튼을 보여 줍니다.
+9. **휴대폰을 퍼블리셔로** — IoT MQTT Panel 앱을 같은 브로커에 붙였습니다. 웹 대시보드는 `#`을 구독해서 메시지를 보낸 기기(xiao, phone)를 표로 보여 줍니다.
+10. **휴대폰 슬라이더로 터치값 보기** — 앱 위젯은 JSON을 못 읽어서 보드가 숫자만 담은 `xiao/touch/value`도 함께 발행하게 했습니다.
+11. **느려진 원인 찾기** — LED가 한 박자 늦고 터치 메시지가 끊기는 문제를 시간 측정으로 좁혀서 **USB 시리얼 출력이 막혀 `loop()`가 멈춘 것**을 찾았습니다(아래 트러블슈팅).
 
 ---
 
@@ -99,6 +117,10 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | (다른 PC) 휴대폰에서 `431 Header fields are too long` | `esp_http_server` 헤더 길이 제한(1024B)이 코어에 고정 | 요청 첫 줄만 읽고 헤더는 길이와 상관없이 건너뜀 |
 | 휴대폰에서 보드 Wi-Fi(AP)가 안 보임 | AP 펌웨어를 컴파일만 하고 **업로드 전**이었다 | 업로드 후 PC에서 Wi-Fi 강제 재검색으로 신호 99% 확인 |
 | `arduino-cli monitor`에 `timeout`을 걸면 로그가 비어 나옴 | Git Bash 환경 문제 | PowerShell `System.IO.Ports.SerialPort`로 읽기 |
+| (MQTT) 보드가 PC의 Mosquitto에 접속 못 함 | Windows `mosquitto` 서비스는 설정 파일 없이 돌아서 **localhost:1883만** 연다 | 프로젝트 설정 파일로 브로커를 따로 실행 (MQTT 1884, WebSocket 9001) |
+| (MQTT) 어제 되던 보드가 오늘 접속 실패 | 공유기가 **PC IP를 바꿨다** (.27 → .22). 보드에는 예전 IP가 들어 있었다 | `secrets.h`의 `MQTT_HOST` 수정 후 재업로드. 공유기에서 PC IP 고정(DHCP 예약) 권장 |
+| (MQTT) LED가 한 박자 늦고 터치 메시지가 5초에 6개만 옴 | 아무도 COM 포트를 안 읽으면 `Serial.printf`가 **몇 초씩 막혀** `loop()`가 멈춤. 시리얼 창을 열고 테스트하면 증상이 사라져서 늦게 찾음 | `Serial.setTxTimeoutMs(0)`로 출력을 버리게 함 → 초당 5개, LED 1초 안에 반영. 함께 `WiFi.setSleep(false)` |
+| (MQTT) 대시보드 페이지가 갑자기 안 열림 | 브로커·웹 서버를 띄운 창이 닫히거나 메모리 부족으로 종료 | `start-all.ps1`로 다시 실행하고 두 창을 열어 둔다 |
 
 ---
 
@@ -112,6 +134,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | [SupabaseDashboard](SupabaseDashboard/) | 로컬 대시보드 + 카메라(80/81번 포트) + Supabase 원격 동기화. `dashboard.html`은 GitHub Pages용 원격 대시보드 | `PSRAM=opi` |
 | [APDashboard](APDashboard/) | AP 모드 대시보드 (`192.168.4.1`) | 기본 |
 | [BLEDashboard](BLEDashboard/) | BLE 서버 + 휴대폰용 Web Bluetooth 페이지(`ble.html`) | 기본 |
+| [MqttDashboard](MqttDashboard/) | MQTT 펌웨어 + 브로커 설정 + 웹 대시보드(`web/index.html`). 실행법·토픽은 [폴더 README](MqttDashboard/README.md) | 기본 |
 | [supabase](supabase/) | 원격 제어용 테이블·권한·RPC를 한 번에 만드는 SQL | – |
 
 ---
@@ -134,6 +157,8 @@ arduino-cli upload  -p COM4 --fqbn $FQBN BLEDashboard
 arduino-cli upload -p COM4 --fqbn $FQBN:PSRAM=opi SupabaseDashboard
 ```
 
+MQTT는 PC에 [Mosquitto](https://mosquitto.org/download/)를 설치하고 `MqttDashboard\start-all.ps1`(브로커 + 웹 서버)을 실행한 뒤 `MqttDashboard`를 업로드합니다. `secrets.h`의 `MQTT_HOST`는 PC의 Wi-Fi IP입니다.
+
 Supabase를 쓰려면 [supabase/xiao_schema.sql](supabase/xiao_schema.sql)을 SQL 편집기에서 실행하고, `<DEVICE_SECRET>` 자리와 `secrets.h`에 같은 값을 넣습니다.
 
 > 부팅하는 몇 초 동안은 D0 터치센서를 만지지 마세요. 이때 기준값을 잽니다.
@@ -152,6 +177,10 @@ xiao-esp32s3-lab/
 │   └── dashboard.html          GitHub Pages 원격 대시보드
 ├── APDashboard/                AP 모드
 ├── BLEDashboard/               BLE + ble.html
+├── MqttDashboard/              MQTT
+│   ├── broker/mosquitto.conf   로컬 브로커 설정 (1884 / 9001)
+│   ├── web/index.html          웹 대시보드 (mqtt.js)
+│   └── start-all.ps1           브로커 + 웹 서버 한 번에 실행
 ├── supabase/xiao_schema.sql    DB 구성
 ├── AGENTS.md                   AI 에이전트 작업 규칙 (실제로 겪은 문제 정리)
 └── STUDY_NOTES.md              학습 정리
