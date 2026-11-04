@@ -1,0 +1,8 @@
+{
+  // 한국어 문장·표는 줄바꿈하지 않는다. 위키 사본과 비밀 파일은 검사하지 않는다.
+  "config": {
+    "MD013": false,
+    "MD024": { "siblings_only": true }
+  },
+  "ignores": ["CLAUDE.md", "Xiao.md", "Wifi tuturial.md", "wifi.md", "WIFI.md", "**/node_modules/**"]
+}

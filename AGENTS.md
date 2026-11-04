@@ -10,13 +10,13 @@
 | --- | --- | --- |
 | 보드 | COM4, IP 192.168.0.25 (집 와이파이, `secrets.h`), mDNS `xiao.local` | Seeed XIAO ESP32-S3 **Sense** |
 | 펌웨어 | `SupabaseDashboard/` | 실제 운영 펌웨어. `Blink/`, `TouchLED/`, `WebDashboard/`는 이전 예제라 건드릴 필요 없음 |
-| BLE 예제 | `BLEDashboard/` | BLE 이름 `XIAO-ESP32S3`. 터치 특성(read/notify, `"touched,value,baseline"`, 200ms), LED 특성(read/write/notify, `"1"`/`"0"`, `on`/`off`/`toggle` 쓰기 가능). UUID는 `.ino` 상단. 휴대폰 페이지 `ble.html` → https://leesm3528-netizen.github.io/xiao-dashboard/ble.html (Web Bluetooth는 HTTPS 필수, 아이폰 Safari 미지원). PC 테스트는 scratchpad venv의 `bleak`로 했다 |
-| AP 모드 예제 | `APDashboard/` | 인터넷 없이 보드가 Wi-Fi(`secrets.h`의 `AP_SSID`)를 직접 띄우고 http://192.168.4.1/ 에서 터치값·LED 제어. 카메라·클라우드 없음, PSRAM 옵션 불필요. 올리면 운영 펌웨어를 덮어쓰므로 다시 쓰려면 `SupabaseDashboard`를 재업로드 |
+| BLE 예제 | `BLEDashboard/` | BLE 이름 `XIAO-ESP32S3`. 터치 특성(read/notify, `"touched,value,baseline"`, 200ms), LED 특성(read/write/notify, `"1"`/`"0"`, `on`/`off`/`toggle` 쓰기 가능). UUID는 `.ino` 상단. 휴대폰 페이지 `ble.html` → <https://leesm3528-netizen.github.io/xiao-dashboard/ble.html> (Web Bluetooth는 HTTPS 필수, 아이폰 Safari 미지원). PC 테스트는 scratchpad venv의 `bleak`로 했다 |
+| AP 모드 예제 | `APDashboard/` | 인터넷 없이 보드가 Wi-Fi(`secrets.h`의 `AP_SSID`)를 직접 띄우고 <http://192.168.4.1/> 에서 터치값·LED 제어. 카메라·클라우드 없음, PSRAM 옵션 불필요. 올리면 운영 펌웨어를 덮어쓰므로 다시 쓰려면 `SupabaseDashboard`를 재업로드 |
 | MQTT 예제 | `MqttDashboard/` (README 참고) | PC의 Mosquitto(프로젝트 설정 `broker/mosquitto.conf`, MQTT 1884 / WebSocket 9001)로 터치값 발행·LED 제어, 웹은 `web/index.html`(mqtt.js 로컬 사본). Mosquitto 서비스는 설정 없이 localhost:1883만 열어서 보드가 못 붙는다(관리자 권한 없어 서비스는 그대로 둠). `http_dir`은 2.1.2에서 동작하지 않았다. 올리면 운영 펌웨어를 덮어씀. **`Serial.setTxTimeoutMs(0)`을 지우지 말 것**(COM 포트를 아무도 안 읽으면 `Serial.printf`가 `loop()`를 몇 초씩 막아 LED 지연·메시지 손실. 시리얼 창을 열면 증상이 사라지므로 측정은 포트를 닫고 할 것). PC IP가 바뀌면 `secrets.h`의 `MQTT_HOST` 수정 |
 | 로컬 대시보드 | 보드 80번 포트 `/`, `/api/status`, `/api/led?state=on\|off\|toggle`, `/api/camera?size=5..11` | Arduino `WebServer`, HTML은 `dashboard_html.h` |
 | 카메라 | 보드 81번 포트 `/stream`(MJPEG), `/capture`(JPEG) | `camera_stream.h`의 자체 HTTP 서버 |
 | 클라우드 동기화 | Supabase `arduino-shop` 프로젝트(`dqwrwqkbvelhqytqyfhi`)의 `public.xiao_state` 테이블 + `public.xiao_report` RPC | 외부망 LED 제어, 터치 상태, 보드 내부 IP |
-| 외부 대시보드 | `SupabaseDashboard/dashboard.html` → https://leesm3528-netizen.github.io/xiao-dashboard/ (GitHub 저장소 `leesm3528-netizen/xiao-dashboard`) | Supabase Realtime 사용, 카메라는 내부 IP 링크만 |
+| 외부 대시보드 | `SupabaseDashboard/dashboard.html` → <https://leesm3528-netizen.github.io/xiao-dashboard/> (GitHub 저장소 `leesm3528-netizen/xiao-dashboard`) | Supabase Realtime 사용, 카메라는 내부 IP 링크만 |
 | 외부망 카메라 | 미구성 (이 PC에 Tailscale 없음) | 7절 참고 |
 | 보드 레퍼런스 | `Xiao.md` | Seeed 공식 위키 사본 |
 

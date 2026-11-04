@@ -52,7 +52,7 @@ if (!touched) {
 보드가 집 공유기에 접속하고(STA), 80번 포트에 웹서버를 엽니다. 페이지의 JS가 0.2초마다 `/api/status`를 불러 화면을 갱신하고, 버튼은 `/api/led?state=on`을 호출합니다.
 
 | 주소 | 하는 일 |
-|---|---|
+| --- | --- |
 | `/` | 대시보드 HTML |
 | `/api/status` | `{"led":false,"touched":false,"value":16940,"baseline":16934}` |
 | `/api/led?state=on\|off\|toggle` | LED를 바꾸고 새 상태를 돌려줌 |
@@ -69,7 +69,7 @@ if (!touched) {
 
 보드와 휴대폰이 서로 직접 연결하는 대신, **둘 다 인터넷 위의 DB(Supabase)에 접속**해서 값을 주고받습니다.
 
-```
+```text
 휴대폰 (어디서나)  ──HTTPS──►  Supabase (xiao_state 테이블)  ◄──HTTPS──  보드 (집 Wi-Fi)
    LED 켜기 = led_on 변경          실시간으로 페이지에 알림            0.2초마다 보고 + LED 값 받기
 ```
@@ -79,7 +79,7 @@ if (!touched) {
 공개 키(publishable key)는 웹페이지에 들어가므로 누구나 볼 수 있습니다. 그래서 키 자체가 아니라 **DB 권한**으로 막아야 합니다.
 
 | 누가 | 무엇을 할 수 있나 | 어떻게 막았나 |
-|---|---|---|
+| --- | --- | --- |
 | 웹페이지 (공개 키) | 상태 읽기, `led_on` 바꾸기 | RLS 정책 + `grant update (led_on)` 열 단위 권한 |
 | 웹페이지 | 터치값 조작, 행 추가·삭제 | 권한 없음 → `permission denied` |
 | 보드 | 터치값·IP 저장, LED 읽기 | `xiao_report()` 함수. **장치 시크릿**이 맞을 때만 실행 |
@@ -120,7 +120,7 @@ Supabase에 연결하는 HTML 한 장을 GitHub Pages에 올렸습니다. 처음
 
 카메라가 찍은 JPEG를 한 응답 안에서 경계 문자열(`--xiaoframe`)로 구분해 계속 보내면, 브라우저는 `<img src=".../stream">` 하나로 영상을 보여 줍니다.
 
-```
+```text
 HTTP/1.1 200 OK
 Content-Type: multipart/x-mixed-replace;boundary=xiaoframe
 
@@ -136,7 +136,7 @@ Content-Length: 12494
 ### 서버 구조를 바꾼 이유
 
 | | 처음 (`esp_http_server`) | 바꾼 뒤 (`WiFiServer` + 작업) |
-|---|---|---|
+| --- | --- | --- |
 | 동시 시청 | 1명 (스트림이 서버를 점유) | 3명 (`MAX_STREAMS`) |
 | 4번째 시청자 | 무한 대기 | 바로 `503` |
 | 긴 요청 헤더 | 1024바이트 넘으면 `431` | 첫 줄만 읽고 나머지는 건너뜀 |
@@ -158,7 +158,7 @@ xTaskCreatePinnedToCore(camClientTask, "camClient", 8192, client, 2, NULL, 0);
 
 `.ino` 파일은 컴파일 전에 전처리기가 함수 선언(프로토타입)을 자동으로 만들어 위쪽에 넣습니다. 그런데 HTML 문자열 안의 자바스크립트 `function start() { ... }`까지 C++ 함수로 오인해서, **HTML 한가운데에** 이런 줄을 끼워 넣었습니다.
 
-```
+```text
 document.getElementById('host').textContent = location.host;
 #line 107 "C:\\Users\\...\\SupabaseDashboard.ino"
 function start();
@@ -195,7 +195,7 @@ WiFi.softAP(AP_SSID, AP_PASS, 1, 0, 4);         // 채널 1, 이름 보임, 최�
 ### GATT 구성
 
 | 항목 | UUID | 권한 | 값 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 서비스 | `d429d54e-...` | – | – |
 | 터치 특성 | `cc6ffe3a-...` | 읽기 · 알림 | `"0,16940,16934"` (터치 여부, 현재값, 기준값) |
 | LED 특성 | `6083a55f-...` | 읽기 · 쓰기 · 알림 | `"1"` / `"0"` (쓰기는 `on`·`off`·`toggle`·`0x01`도 받음) |
@@ -240,7 +240,7 @@ await ledChar.writeValue(new TextEncoder().encode('1'));
 ## 7. 연결 방식 비교
 
 | | 같은 Wi-Fi | Supabase | AP 모드 | BLE |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 인터넷 | 불필요 | **필요** | 불필요 | 불필요 |
 | 거리 | 공유기 범위 | 어디서나 | 약 수십 m | 약 10m |
 | 휴대폰 동시 접속 | 여러 대 | 여러 대 | 최대 4대 | **1대** |
@@ -264,7 +264,7 @@ await ledChar.writeValue(new TextEncoder().encode('1'));
 
 ### 구조
 
-```
+```text
 [XIAO] --MQTT 1884-->  [Mosquitto (PC)]  <--WebSocket 9001-- [웹 대시보드]
                               ^
                               +--MQTT 1884-- [휴대폰 IoT MQTT Panel]
@@ -275,7 +275,7 @@ await ledChar.writeValue(new TextEncoder().encode('1'));
 ### 토픽 설계
 
 | 토픽 | 보내는 쪽 | 값 | 옵션 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `xiao/status` | 보드 | `online` / `offline` | retained, `offline`은 LWT |
 | `xiao/touch` | 보드 | `{"touched":false,"value":17000,"baseline":17000}` | 0.2초마다 + 터치 상태가 바뀔 때 |
 | `xiao/touch/value` | 보드 | `17000` | 앱 위젯용(숫자만) |
@@ -322,14 +322,14 @@ WiFi.setSleep(false);       // 와이파이 절전 끄기 (명령 수신 지연 
 ```
 
 | | 고치기 전 | 고친 후 |
-|---|---|---|
+| --- | --- | --- |
 | 터치 메시지 | 5초에 약 6개, 몰렸다 끊김 | 초당 5개 일정 |
 | LED 명령 반영 | 한 박자 늦음 | 1초 안 |
 
 ### 휴대폰 앱 (IoT MQTT Panel)
 
 | 패널 | 토픽 | 설정 |
-|---|---|---|
+| --- | --- | --- |
 | Button | `phone/hello` | 값 `hi` → 웹 대시보드 퍼블리셔 표에 phone 표시 |
 | Button | `xiao/led/set` | 값 `toggle` |
 | Slider | `xiao/touch/value` | 15000 ~ 60000 (보드 값 표시용) |
@@ -340,7 +340,7 @@ WiFi.setSleep(false);       // 와이파이 절전 끄기 (명령 수신 지연 
 ### 연결 방식 비교에 추가
 
 | | MQTT (로컬) |
-|---|---|
+| --- | --- |
 | 인터넷 | 불필요 (같은 Wi-Fi + PC 브로커) |
 | 휴대폰 동시 접속 | 여러 대 |
 | 지연 | 짧음 (1초 안) |

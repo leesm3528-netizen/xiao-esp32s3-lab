@@ -2,7 +2,7 @@
 
 XIAO ESP32-S3 터치값(D0)을 MQTT로 올리고, 웹에서 LED(GPIO21)를 제어한다.
 
-```
+```text
 [XIAO] --MQTT 1884--> [Mosquitto (이 PC 192.168.0.22)] <--WebSocket 9001-- [브라우저 web/index.html]
 ```
 
@@ -13,7 +13,7 @@ XIAO ESP32-S3 터치값(D0)을 MQTT로 올리고, 웹에서 LED(GPIO21)를 제�
 2. 펌웨어: `arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32S3 MqttDashboard` → `arduino-cli upload -p COM4 ...`
    - 운영 펌웨어(`SupabaseDashboard`)를 덮어쓴다.
 3. 대시보드: `web/index.html`을 더블클릭해서 연다.
-   - 휴대폰 브라우저에서도 보려면 `web` 폴더에서 `python -m http.server 8080 --bind 0.0.0.0` 실행 후 휴대폰에서 http://192.168.0.22:8080 (페이지가 접속한 주소의 9001번으로 WebSocket 연결).
+   - 휴대폰 브라우저에서도 보려면 `web` 폴더에서 `python -m http.server 8080 --bind 0.0.0.0` 실행 후 휴대폰에서 <http://192.168.0.22:8080> (페이지가 접속한 주소의 9001번으로 WebSocket 연결).
 
 **PC IP는 공유기가 바꿀 수 있다**(2026-11-02에 .27 → .22로 바뀌어 보드가 못 붙었다). 바뀌면 `secrets.h`의 `MQTT_HOST`를 고치고 다시 업로드하고, 휴대폰 앱 설정도 바꾼다. 공유기에서 PC에 DHCP 예약을 걸어 두는 것을 권장.
 

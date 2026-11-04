@@ -22,7 +22,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 같은 LED·터치센서를 연결 방식만 바꿔서 제어했습니다.
 
 | 방식 | 스케치 | 인터넷 | 스마트폰에서 접속하는 법 | 확인 결과 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **같은 Wi-Fi 웹서버** | [WebDashboard](WebDashboard/WebDashboard.ino) | 필요 없음 (공유기만) | 집 Wi-Fi에서 `http://xiao.local/` | – |
 | **클라우드 원격 제어** | [SupabaseDashboard](SupabaseDashboard/SupabaseDashboard.ino) | 필요 | 어디서나 [원격 대시보드](https://leesm3528-netizen.github.io/xiao-dashboard/) | LED 원격 점등 확인 |
 | **카메라 스트리밍** | [SupabaseDashboard](SupabaseDashboard/camera_stream.h) | 필요 없음 (같은 Wi-Fi) | `http://<보드 IP>/` | 3명 동시 시청, 약 24fps(VGA, 1명) |
@@ -37,7 +37,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ### 보드와 핀
 
 | 키워드 | 한 줄 정리 | 스케치 |
-|---|---|---|
+| --- | --- | --- |
 | **XIAO ESP32-S3 Sense** | 엄지손톱만 한 ESP32-S3 보드. Wi-Fi·BLE 내장, 8MB PSRAM, 카메라 확장보드(Sense) | – |
 | **유저 LED (GPIO21)** | **active-low**: `LOW`가 켜짐, `HIGH`가 꺼짐 | [Blink](Blink/Blink.ino) |
 | **정전식 터치 (D0 = GPIO1)** | `touchRead()`로 읽는다. ESP32-S3는 손을 대면 값이 **올라간다** (평소 약 17,000) | [TouchLED](TouchLED/TouchLED.ino) |
@@ -46,7 +46,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ### 네트워크
 
 | 키워드 | 한 줄 정리 | 스케치 |
-|---|---|---|
+| --- | --- | --- |
 | **STA 모드** | 보드가 집 공유기에 **접속하는** 쪽. 공유기가 IP를 준다 | [WebDashboard](WebDashboard/WebDashboard.ino) |
 | **AP 모드** | 보드가 직접 **Wi-Fi를 띄우는** 쪽. 인터넷 없는 공유기가 되고 IP는 `192.168.4.1` | [APDashboard](APDashboard/APDashboard.ino) |
 | **mDNS** | IP 대신 `xiao.local` 같은 이름으로 접속 | [WebDashboard](WebDashboard/WebDashboard.ino) |
@@ -55,7 +55,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ### 클라우드 (Supabase)
 
 | 키워드 | 한 줄 정리 | 파일 |
-|---|---|---|
+| --- | --- | --- |
 | **왜 클라우드?** | 보드는 공유기 안쪽(사설 IP)이라 밖에서 직접 못 들어온다. 보드와 휴대폰이 둘 다 **바깥의 DB**에 접속해서 값을 주고받는다 | – |
 | **RLS + 열 단위 권한** | 공개 키로는 `led_on` 열만 바꿀 수 있게 막았다. 터치값은 웹에서 못 바꾼다 | [xiao_schema.sql](supabase/xiao_schema.sql) |
 | **RPC (보드 전용 함수)** | 보드는 `xiao_report()` 하나만 호출. 장치 시크릿이 맞아야 저장되고, 응답으로 LED 목표값을 받는다 | [xiao_schema.sql](supabase/xiao_schema.sql) |
@@ -64,7 +64,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ### 카메라
 
 | 키워드 | 한 줄 정리 | 파일 |
-|---|---|---|
+| --- | --- | --- |
 | **PSRAM** | 카메라 프레임 버퍼를 담는 외장 램. 빌드 옵션 `PSRAM=opi`가 없으면 카메라가 안 뜬다 | – |
 | **MJPEG 스트림** | JPEG 사진을 `multipart/x-mixed-replace`로 계속 이어 보내면 `<img>` 하나로 영상이 된다 | [camera_stream.h](SupabaseDashboard/camera_stream.h) |
 | **FreeRTOS 작업** | 시청자마다 작업(task)을 따로 만들어서 한 명이 보는 동안 다른 요청이 막히지 않게 했다 | [camera_stream.h](SupabaseDashboard/camera_stream.h) |
@@ -72,7 +72,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ### BLE
 
 | 키워드 | 한 줄 정리 | 파일 |
-|---|---|---|
+| --- | --- | --- |
 | **GATT 서비스 / 특성** | 서비스(UUID) 안에 특성(characteristic) 두 개: 터치(읽기·알림), LED(읽기·쓰기·알림) | [BLEDashboard](BLEDashboard/BLEDashboard.ino) |
 | **Notify** | 휴대폰이 묻지 않아도 보드가 값이 바뀔 때 먼저 보내 준다(0.2초 간격) | [BLEDashboard](BLEDashboard/BLEDashboard.ino) |
 | **Web Bluetooth** | 브라우저에서 BLE 기기에 직접 연결. **HTTPS 필수**, 안드로이드 Chrome 지원(아이폰 Safari 미지원) | [ble.html](BLEDashboard/ble.html) |
@@ -80,7 +80,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ### MQTT
 
 | 키워드 | 한 줄 정리 | 파일 |
-|---|---|---|
+| --- | --- | --- |
 | **브로커 (Mosquitto)** | 메시지 우체국. 보드·웹·휴대폰은 서로 직접 연결하지 않고 PC의 브로커에만 붙는다 | [mosquitto.conf](MqttDashboard/broker/mosquitto.conf) |
 | **토픽 · 발행 · 구독** | `xiao/touch`처럼 주소(토픽)에 값을 **발행(publish)** 하면, 그 토픽을 **구독(subscribe)** 한 모두가 받는다. `#`은 "전부" | [MqttDashboard.ino](MqttDashboard/MqttDashboard.ino) |
 | **retained · LWT** | `retained`는 마지막 값을 브로커가 기억해 새로 접속한 쪽에 바로 준다. LWT(유언)는 보드가 갑자기 끊기면 브로커가 대신 `offline`을 발행 | [MqttDashboard.ino](MqttDashboard/MqttDashboard.ino) |
@@ -100,17 +100,20 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 
 ## 진행 과정 · 2일차 (11/2 ~ 11/3)
 
+<!-- markdownlint-disable MD029 -- 1일차에서 이어지는 번호 -->
 8. **MQTT 로컬 대시보드** — PC에 설치한 Mosquitto를 브로커로 쓰고, 보드는 터치값을 발행하고 LED 명령을 구독합니다. 웹 대시보드는 터치값·30초 그래프·LED 버튼을 보여 줍니다.
 9. **휴대폰을 퍼블리셔로** — IoT MQTT Panel 앱을 같은 브로커에 붙였습니다. 웹 대시보드는 `#`을 구독해서 메시지를 보낸 기기(xiao, phone)를 표로 보여 줍니다.
 10. **휴대폰 슬라이더로 터치값 보기** — 앱 위젯은 JSON을 못 읽어서 보드가 숫자만 담은 `xiao/touch/value`도 함께 발행하게 했습니다.
 11. **느려진 원인 찾기** — LED가 한 박자 늦고 터치 메시지가 끊기는 문제를 시간 측정으로 좁혀서 **USB 시리얼 출력이 막혀 `loop()`가 멈춘 것**을 찾았습니다(아래 트러블슈팅).
+
+<!-- markdownlint-enable MD029 -->
 
 ---
 
 ## 트러블슈팅
 
 | 증상 | 원인 | 해결 |
-|---|---|---|
+| --- | --- | --- |
 | 원격 대시보드 버튼을 눌러도 LED가 안 켜짐 | 보드에 **이전 펌웨어**가 그대로 있었다. DB에 보드 접속 기록이 0건 | 새 펌웨어 업로드. 이후 "고치면 바로 업로드하고 접속 기록 확인"을 규칙으로 |
 | 카메라 사진은 되는데 영상은 까만 화면 | Arduino 전처리기가 HTML 안 JS의 `function start()`를 C++ 함수로 오인해 `#line ...`을 끼워 넣음 → 스크립트 전체가 문법 오류 | HTML을 `.ino`가 아닌 **`.h` 파일**로 분리 |
 | 영상이 한 기기에서만 보임 | `esp_http_server`는 스트림 하나가 서버 작업을 계속 점유 | 시청자마다 FreeRTOS 작업을 만드는 `WiFiServer` 서버로 교체 |
@@ -127,7 +130,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ## 스케치
 
 | 폴더 | 설명 | 빌드 옵션 |
-|---|---|---|
+| --- | --- | --- |
 | [Blink](Blink/) | LED 켜기·끄기를 `delay` 없이 반복 → 너무 빨라서 눈에는 계속 켜진 것처럼 보인다 | 기본 |
 | [TouchLED](TouchLED/) | D0을 터치하는 동안 LED 켜기, 시리얼로 기준값·현재값 출력 | 기본 |
 | [WebDashboard](WebDashboard/) | 같은 Wi-Fi 웹 대시보드 (LED, 터치) | 기본 |
@@ -167,7 +170,7 @@ Supabase를 쓰려면 [supabase/xiao_schema.sql](supabase/xiao_schema.sql)을 SQ
 
 ## 폴더 구조
 
-```
+```text
 xiao-esp32s3-lab/
 ├── Blink/ · TouchLED/          기초 예제
 ├── WebDashboard/               같은 Wi-Fi 웹서버
