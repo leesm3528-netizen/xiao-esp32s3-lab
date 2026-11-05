@@ -1,6 +1,7 @@
 # XIAO ESP32-S3 Lab
 
 Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고, 같은 기능을 **Wi-Fi 웹서버 → 클라우드(Supabase) 원격 제어 → 카메라 스트리밍 → AP 모드 → BLE → MQTT** 순서로 연결 방식을 바꿔 가며 스마트폰에서 제어해 본 학습 기록입니다.
+3일차에는 카메라로 사진을 모아 **Edge Impulse**로 이미지 분류 모델(민트 / 물병)을 학습했습니다.
 코드는 AI 코딩 에이전트(Claude Code)와 함께 작성했고, `arduino-cli`로 노트북에서 보드에 바로 업로드했습니다.
 
 ![ESP32](https://img.shields.io/badge/ESP32--S3-E7352C?style=flat-square&logo=espressif&logoColor=white)
@@ -8,6 +9,7 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Bluetooth](https://img.shields.io/badge/BLE-0082FC?style=flat-square&logo=bluetooth&logoColor=white)
 ![MQTT](https://img.shields.io/badge/MQTT_(Mosquitto)-660066?style=flat-square&logo=mqtt&logoColor=white)
+![Edge Impulse](https://img.shields.io/badge/Edge_Impulse-3B47C2?style=flat-square)
 ![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-222222?style=flat-square&logo=githubpages&logoColor=white)
 ![arduino-cli](https://img.shields.io/badge/arduino--cli-esp32_3.3.12-00979D?style=flat-square)
 
@@ -77,6 +79,15 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | **Notify** | 휴대폰이 묻지 않아도 보드가 값이 바뀔 때 먼저 보내 준다(0.2초 간격) | [BLEDashboard](BLEDashboard/BLEDashboard.ino) |
 | **Web Bluetooth** | 브라우저에서 BLE 기기에 직접 연결. **HTTPS 필수**, 안드로이드 Chrome 지원(아이폰 Safari 미지원) | [ble.html](BLEDashboard/ble.html) |
 
+### Edge Impulse (이미지 분류)
+
+| 키워드 | 한 줄 정리 | 파일 |
+| --- | --- | --- |
+| **수집 대시보드** | PC 파이썬 서버가 보드 `/capture`를 받아 `라벨.시각.jpg`로 저장. 연속 촬영·삭제(휴지통)·되돌리기·ZIP | [EICollector](EICollector/) |
+| **Edge Impulse REST API** | 브라우저 없이 API 키로 업로드 → 특징 추출 → 학습 → Arduino 라이브러리 빌드까지 스크립트로 | [EIModel/scripts](EIModel/scripts/) |
+| **int8 양자화** | 보드에서 빠르게 돌리려고 가중치를 8비트로 줄인다. 모델에 따라 정확도가 크게 떨어질 수 있어서 int8 점수로 모델을 골랐다 | [EIModel](EIModel/README.md) |
+| **전처리 맞추기** | 학습 사진과 같은 240×240 JPEG를 RGB로 풀고 96×96으로 줄여 모델에 넣는다 | [EIInference](EIInference/EIInference.ino) |
+
 ### MQTT
 
 | 키워드 | 한 줄 정리 | 파일 |
@@ -108,6 +119,17 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 
 <!-- markdownlint-enable MD029 -->
 
+## 진행 과정 · 3일차 (11/4 ~ 11/5)
+
+<!-- markdownlint-disable MD029 -- 2일차에서 이어지는 번호 -->
+12. **문서 lint** — markdownlint 설정 파일을 만들고 문서 오류를 고쳤습니다.
+13. **사진 수집 대시보드** — 카메라 전용 펌웨어(`EICamera`)와 PC 수집 서버(`EICollector`)로 클래스별 촬영·연속 촬영·삭제·ZIP 다운로드를 만들었습니다. 민트 100장, 물병 101장을 모았습니다.
+14. **모델 학습** — `.env`의 API 키로 Edge Impulse에 업로드하고 학습했습니다. MobileNetV2는 int8로 바꾸면 정확도가 76~88%로 떨어져서, int8에서도 점수가 유지되는 MobileNetV1 0.25를 골랐습니다. 테스트 정확도 90%(40장 중 36장).
+15. **원격 대시보드 복구** — 외부 대시보드가 "오프라인"이었던 원인은 보드에 수집 펌웨어가 올라가 있었기 때문이었습니다. 운영 펌웨어를 다시 올려 LED 원격 제어를 확인했습니다.
+16. **추론 펌웨어 작성** — 보드에서 분류하고 웹 페이지·시리얼·LED로 결과를 보여 주는 `EIInference`를 작성했습니다. **컴파일·업로드는 아직 확인 전입니다**(SDK 첫 컴파일이 오래 걸리고 PC 메모리가 부족해 중단).
+
+<!-- markdownlint-enable MD029 -->
+
 ---
 
 ## 트러블슈팅
@@ -123,6 +145,9 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | (MQTT) 보드가 PC의 Mosquitto에 접속 못 함 | Windows `mosquitto` 서비스는 설정 파일 없이 돌아서 **localhost:1883만** 연다 | 프로젝트 설정 파일로 브로커를 따로 실행 (MQTT 1884, WebSocket 9001) |
 | (MQTT) 어제 되던 보드가 오늘 접속 실패 | 공유기가 **PC IP를 바꿨다** (.27 → .22). 보드에는 예전 IP가 들어 있었다 | `secrets.h`의 `MQTT_HOST` 수정 후 재업로드. 공유기에서 PC IP 고정(DHCP 예약) 권장 |
 | (MQTT) LED가 한 박자 늦고 터치 메시지가 5초에 6개만 옴 | 아무도 COM 포트를 안 읽으면 `Serial.printf`가 **몇 초씩 막혀** `loop()`가 멈춤. 시리얼 창을 열고 테스트하면 증상이 사라져서 늦게 찾음 | `Serial.setTxTimeoutMs(0)`로 출력을 버리게 함 → 초당 5개, LED 1초 안에 반영. 함께 `WiFi.setSleep(false)` |
+| (EI) 사진을 지웠는데 휴지통에 복사본이 남고 원본도 그대로 | Windows에서 브라우저가 읽는 중인 파일을 `shutil.move`하면 복사로 바뀌고 원본 삭제는 실패 | `os.replace` 재시도만 쓰고, 실패한 장수는 화면에 알림 |
+| (EI) MobileNetV2가 float32 100%인데 보드용 int8은 76% | 양자화로 정확도가 크게 떨어짐 | Dense 층 제거(88%) → MobileNetV1 0.25로 교체(int8 = float32 = 90.9%) |
+| (EI) 원격 대시보드가 "오프라인" | 수집 펌웨어(`EICamera`)가 운영 펌웨어를 덮어써서 클라우드 접속이 멈춤 | `SupabaseDashboard` 재업로드. 펌웨어는 한 번에 하나만 올라간다 |
 | (MQTT) 대시보드 페이지가 갑자기 안 열림 | 브로커·웹 서버를 띄운 창이 닫히거나 메모리 부족으로 종료 | `start-all.ps1`로 다시 실행하고 두 창을 열어 둔다 |
 
 ---
@@ -138,6 +163,10 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | [APDashboard](APDashboard/) | AP 모드 대시보드 (`192.168.4.1`) | 기본 |
 | [BLEDashboard](BLEDashboard/) | BLE 서버 + 휴대폰용 Web Bluetooth 페이지(`ble.html`) | 기본 |
 | [MqttDashboard](MqttDashboard/) | MQTT 펌웨어 + 브로커 설정 + 웹 대시보드(`web/index.html`). 실행법·토픽은 [폴더 README](MqttDashboard/README.md) | 기본 |
+| [EICamera](EICamera/) | Edge Impulse 사진 수집용 카메라 펌웨어 (240×240 시작, 해상도·품질 API) | `PSRAM=opi` |
+| [EICollector](EICollector/) | PC 수집 대시보드 (파이썬 표준 라이브러리만). [폴더 README](EICollector/README.md) | – |
+| [EIModel](EIModel/) | 학습 스크립트와 Arduino 라이브러리 zip, 결과. [폴더 README](EIModel/README.md) | – |
+| [EIInference](EIInference/) | 보드에서 분류 + 결과 페이지 (컴파일 확인 전). [폴더 README](EIInference/README.md) | `PSRAM=opi` |
 | [supabase](supabase/) | 원격 제어용 테이블·권한·RPC를 한 번에 만드는 SQL | – |
 
 ---
@@ -184,6 +213,10 @@ xiao-esp32s3-lab/
 │   ├── broker/mosquitto.conf   로컬 브로커 설정 (1884 / 9001)
 │   ├── web/index.html          웹 대시보드 (mqtt.js)
 │   └── start-all.ps1           브로커 + 웹 서버 한 번에 실행
+├── EICamera/                   사진 수집용 카메라 펌웨어
+├── EICollector/                PC 수집 대시보드 (server.py, web/index.html)
+├── EIModel/                    Edge Impulse 학습 스크립트 + Arduino 라이브러리 zip
+├── EIInference/                보드에서 분류
 ├── supabase/xiao_schema.sql    DB 구성
 ├── AGENTS.md                   AI 에이전트 작업 규칙 (실제로 겪은 문제 정리)
 └── STUDY_NOTES.md              학습 정리

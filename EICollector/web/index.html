@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XIAO 이미지 수집</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #fff; --line: #e2e5ea; --text: #1d2330; --muted: #6b7280;
+    --accent: #2563eb; --accent-ink: #fff; --danger: #dc2626; --ok: #16a34a; --warn: #d97706;
+    --sel: #2563eb33;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --panel: #181c24; --line: #2a303c; --text: #e6e8ec; --muted: #9aa3b2;
+      --accent: #3b82f6; --accent-ink: #fff; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b;
+      --sel: #3b82f644;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+           padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  h1 { font-size: 17px; margin: 0; }
+  h2 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  main { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(320px, 1.15fr); gap: 16px;
+         padding: 16px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  button, select, input { font: inherit; color: inherit; }
+  button { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 6px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.danger { color: var(--danger); }
+  button.danger.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
+  input, select { border: 1px solid var(--line); background: var(--bg); border-radius: 7px; padding: 6px 8px; }
+  input[type=number] { width: 72px; }
+  kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px;
+        border-radius: 4px; padding: 0 4px; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--danger); }
+
+  .viewer { position: relative; background: #000; border-radius: 8px; overflow: hidden;
+            min-height: 240px; display: grid; place-items: center; }
+  .viewer img { width: 100%; height: auto; max-height: 65vh; object-fit: contain; display: block; }
+  .viewer .msg { position: absolute; color: #ccc; text-align: center; padding: 16px; }
+  .viewer .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .viewer .flash.go { opacity: .55; transition: none; }
+  .viewer .badge { position: absolute; left: 8px; top: 8px; background: #000a; color: #fff; padding: 2px 8px;
+                   border-radius: 99px; font-size: 12px; }
+
+  .classes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 99px;
+          padding: 5px 12px; cursor: pointer; background: var(--bg); user-select: none; }
+  .chip.active { border-color: var(--accent); background: var(--sel); font-weight: 600; }
+  .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 400; }
+  .chip kbd { margin-left: 2px; }
+
+  .bigbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .bigbtns button { padding: 14px; font-size: 15px; font-weight: 600; }
+  .progress { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 10px; }
+  .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+  .bars { display: flex; flex-direction: column; gap: 6px; }
+  .bar { display: grid; grid-template-columns: 110px 1fr 48px; gap: 8px; align-items: center; font-size: 13px; }
+  .bar .track { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--accent); }
+  .bar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .cnt { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px;
+             max-height: 62vh; overflow: auto; padding: 2px; }
+  .thumb { position: relative; border-radius: 6px; overflow: hidden; border: 2px solid transparent;
+           cursor: pointer; background: #000; aspect-ratio: 1; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.sel { border-color: var(--accent); }
+  .thumb.sel::after { content: "✓"; position: absolute; right: 4px; top: 2px; color: #fff;
+                      background: var(--accent); border-radius: 50%; width: 18px; height: 18px;
+                      font-size: 12px; display: grid; place-items: center; }
+  .thumb .x { position: absolute; left: 4px; top: 4px; width: 22px; height: 22px; padding: 0; border-radius: 50%;
+              background: #000b; color: #fff; border: none; opacity: 0; font-size: 13px; line-height: 22px; }
+  .thumb:hover .x { opacity: 1; }
+  @media (hover: none) { .thumb .x { opacity: 1; } }
+  .thumb.new { animation: pop .5s; }
+  @keyframes pop { from { transform: scale(.85); opacity: .3; } to { transform: none; opacity: 1; } }
+  .empty { color: var(--muted); padding: 24px; text-align: center; grid-column: 1 / -1; }
+
+  .preview { position: fixed; inset: 0; background: #000d; display: none; place-items: center; z-index: 10; }
+  .preview.show { display: grid; }
+  .preview img { max-width: 92vw; max-height: 80vh; image-rendering: pixelated; }
+  .preview .cap { color: #ddd; margin-top: 10px; text-align: center; font-size: 13px; }
+
+  #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex;
+           flex-direction: column; gap: 6px; align-items: center; z-index: 20; }
+  .t { background: #111c; color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 13px; }
+  .t.err { background: var(--danger); }
+  details summary { cursor: pointer; color: var(--muted); }
+  .help li { margin: 2px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>XIAO 이미지 수집 <span class="muted" style="font-weight:400">· Edge Impulse 분류용</span></h1>
+  <div class="row">
+    <span class="dot" id="dot"></span>
+    <span id="boardInfo" class="muted">보드 확인 중…</span>
+    <input id="boardHost" size="15" aria-label="보드 주소">
+    <button id="boardSave">연결</button>
+  </div>
+</header>
+
+<main>
+  <div class="stack">
+    <section class="panel">
+      <h2>카메라 <span class="row">
+        <button id="streamToggle" title="영상 끄면 보드의 시청 자리(최대 3)가 비고 발열이 줄어듭니다">영상 끄기</button>
+      </span></h2>
+      <div class="viewer">
+        <img id="stream" alt="">
+        <div class="msg" id="streamMsg">영상 연결 중…</div>
+        <div class="flash" id="flash"></div>
+        <div class="badge" id="badge" hidden></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label>해상도
+          <select id="size">
+            <option value="0">96×96</option>
+            <option value="2">128×128</option>
+            <option value="5">240×240 (권장)</option>
+            <option value="6">320×240</option>
+            <option value="8">480×320</option>
+            <option value="9">640×480</option>
+          </select>
+        </label>
+        <label>JPEG 품질
+          <select id="quality">
+            <option value="10">10 (최고)</option>
+            <option value="12">12</option>
+            <option value="16">16</option>
+            <option value="24">24</option>
+            <option value="32">32 (작게)</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>촬영</h2>
+      <div class="classes" id="classes"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="newClass" placeholder="새 클래스 (예: cup, background)" maxlength="40" style="flex:1;min-width:160px">
+        <button id="addClass">추가</button>
+      </div>
+      <div class="bigbtns">
+        <button class="primary" id="shot">찍기 <kbd>Space</kbd></button>
+        <button id="burst">연속 촬영 <kbd>B</kbd></button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label>장수 <input type="number" id="burstCount" min="2" max="500" value="20"></label>
+        <label>간격(ms) <input type="number" id="burstGap" min="0" max="5000" step="50" value="300"></label>
+        <span class="muted" id="burstState"></span>
+      </div>
+      <div class="progress"><div id="prog"></div></div>
+      <p class="muted" id="last" style="margin:10px 0 0">아직 찍은 사진이 없습니다.</p>
+    </section>
+
+    <section class="panel">
+      <h2>클래스별 장수 <span class="muted" id="total"></span></h2>
+      <div class="bars" id="bars"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="dlAll">전체 ZIP 받기</button>
+      </div>
+      <details style="margin-top:12px">
+        <summary>수집 팁 · 단축키</summary>
+        <ul class="help muted">
+          <li>Edge Impulse 이미지 분류는 정사각형 입력(96×96, 160×160)을 많이 씁니다. <b>240×240</b>으로 찍으면 잘리는 부분 없이 줄어듭니다.</li>
+          <li>클래스마다 비슷한 장수(최소 50장 이상)를 모으고, 물체가 없는 <b>background</b> 클래스도 만드세요.</li>
+          <li>각도·거리·조명·배경을 바꿔 가며 찍으면 모델이 덜 헷갈립니다.</li>
+          <li>파일 이름이 <code>클래스.시각.jpg</code>라서 Edge Impulse에 올리면 라벨이 자동으로 붙습니다.</li>
+          <li><kbd>Space</kbd> 찍기 · <kbd>B</kbd> 연속 촬영 · <kbd>Esc</kbd> 연속 촬영 중지 · <kbd>1</kbd>~<kbd>9</kbd> 클래스 선택 · <kbd>Delete</kbd> 선택 삭제 · <kbd>Ctrl</kbd>+<kbd>Z</kbd> 삭제 되돌리기</li>
+        </ul>
+      </details>
+    </section>
+  </div>
+
+  <section class="panel" style="min-width:0">
+    <h2>
+      <span id="galTitle">사진</span>
+      <span class="row">
+        <button id="selAll">전체 선택</button>
+        <button id="delSel" class="danger" disabled>선택 삭제</button>
+        <button id="undo" disabled>되돌리기</button>
+        <button id="dlClass">이 클래스 ZIP</button>
+        <button id="delClass" class="danger">클래스 삭제</button>
+      </span>
+    </h2>
+    <div class="gallery" id="gallery"></div>
+  </section>
+</main>
+
+<div class="preview" id="preview">
+  <div><img id="previewImg" alt=""><div class="cap" id="previewCap"></div></div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const S = { board: '', classes: [], total: 0, undo: 0, label: '', images: [], sel: new Set(),
+            streamOn: true, bursting: false, stopBurst: false, cam: null };
+
+function toast(msg, err) {
+  const el = document.createElement('div');
+  el.className = 't' + (err ? ' err' : '');
+  el.textContent = msg;
+  $('toast').appendChild(el);
+  setTimeout(() => el.remove(), err ? 4500 : 1800);
+}
+
+async function api(path, opts = {}) {
+  const init = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) {
+    init.method = opts.method || 'POST';
+    init.headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(opts.body);
+  }
+  const r = await fetch(path, init);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+
+// ---------- state & rendering
+function applySummary(s) {
+  S.board = s.board; S.classes = s.classes; S.total = s.total; S.undo = s.undo;
+  if (document.activeElement !== $('boardHost')) $('boardHost').value = s.board;
+  if (!S.classes.some(c => c.name === S.label)) S.label = S.classes.length ? S.classes[0].name : '';
+  renderClasses();
+}
+
+function renderClasses() {
+  const box = $('classes');
+  box.textContent = '';
+  if (!S.classes.length) {
+    box.innerHTML = '<span class="muted">클래스를 먼저 추가하세요.</span>';
+  }
+  S.classes.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'chip' + (c.name === S.label ? ' active' : '');
+    el.innerHTML = `<span></span><span class="n">${c.count}</span>` + (i < 9 ? `<kbd>${i + 1}</kbd>` : '');
+    el.firstChild.textContent = c.name;
+    el.onclick = () => selectClass(c.name);
+    box.appendChild(el);
+  });
+
+  const max = Math.max(1, ...S.classes.map(c => c.count));
+  const bars = $('bars');
+  bars.textContent = '';
+  S.classes.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'bar';
+    el.innerHTML = `<span class="name"></span><div class="track"><div class="fill" style="width:${c.count / max * 100}%"></div></div><span class="cnt">${c.count}</span>`;
+    el.firstChild.textContent = c.name;
+    bars.appendChild(el);
+  });
+  if (!S.classes.length) bars.innerHTML = '<span class="muted">없음</span>';
+  $('total').textContent = `총 ${S.total}장`;
+
+  const has = !!S.label;
+  ['shot', 'burst', 'dlClass', 'delClass', 'selAll'].forEach(id => $(id).disabled = !has || (S.bursting && id !== 'burst'));
+  $('undo').disabled = !S.undo;
+  $('dlAll').disabled = !S.total;
+  $('galTitle').textContent = has ? `사진 · ${S.label} (${(S.classes.find(c => c.name === S.label) || {}).count || 0})` : '사진';
+}
+
+function thumb(img, isNew) {
+  const el = document.createElement('div');
+  el.className = 'thumb' + (S.sel.has(img.file) ? ' sel' : '') + (isNew ? ' new' : '');
+  el.dataset.file = img.file;
+  el.innerHTML = `<img loading="lazy" alt=""><button class="x" title="삭제">✕</button>`;
+  el.firstChild.src = img.url;
+  el.onclick = (e) => {
+    if (e.target.classList.contains('x')) return;
+    if (e.shiftKey || e.ctrlKey || e.metaKey || S.sel.size) toggleSel(img.file, el);
+    else openPreview(img);
+  };
+  el.ondblclick = () => openPreview(img);
+  el.querySelector('.x').onclick = (e) => { e.stopPropagation(); deleteFiles([img.file]); };
+  el.oncontextmenu = (e) => { e.preventDefault(); toggleSel(img.file, el); };
+  return el;
+}
+
+function renderGallery() {
+  const g = $('gallery');
+  g.textContent = '';
+  if (!S.label) { g.innerHTML = '<div class="empty">클래스를 추가하면 여기에 사진이 쌓입니다.</div>'; return; }
+  if (!S.images.length) { g.innerHTML = '<div class="empty">아직 사진이 없습니다. <kbd>Space</kbd>로 찍어 보세요.</div>'; }
+  S.images.forEach(img => g.appendChild(thumb(img)));
+  updateSelUi();
+}
+
+function toggleSel(file, el) {
+  if (S.sel.has(file)) S.sel.delete(file); else S.sel.add(file);
+  el.classList.toggle('sel', S.sel.has(file));
+  updateSelUi();
+}
+
+function updateSelUi() {
+  $('delSel').disabled = !S.sel.size;
+  $('delSel').textContent = S.sel.size ? `선택 삭제 (${S.sel.size})` : '선택 삭제';
+  $('selAll').textContent = S.sel.size && S.sel.size === S.images.length ? '선택 해제' : '전체 선택';
+}
+
+async function refresh() {
+  applySummary(await api('/api/state'));
+  await loadImages();
+}
+
+async function loadImages() {
+  S.sel.clear();
+  S.images = S.label ? (await api('/api/images?label=' + encodeURIComponent(S.label))).images : [];
+  renderGallery();
+}
+
+async function selectClass(name) {
+  if (S.bursting || name === S.label) return;
+  S.label = name;
+  renderClasses();
+  await loadImages();
+}
+
+// ---------- classes
+async function addClass() {
+  const name = $('newClass').value.trim();
+  if (!name) return;
+  try {
+    applySummary(await api('/api/classes', { body: { name } }));
+    $('newClass').value = '';
+    await selectClass(name);
+    toast(`클래스 "${name}" 추가`);
+  } catch (e) { toast(e.message, true); }
+}
+
+// two-step confirm in place of a browser dialog
+function armed(btn, label, fn) {
+  if (btn.classList.contains('armed')) {
+    btn.classList.remove('armed'); btn.textContent = label; clearTimeout(btn._t); fn();
+    return;
+  }
+  btn.classList.add('armed'); btn.textContent = '한 번 더 누르면 삭제';
+  btn._t = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3000);
+}
+
+async function deleteClass() {
+  try {
+    applySummary(await api('/api/classes/' + encodeURIComponent(S.label), { method: 'DELETE' }));
+    await loadImages();
+    toast('클래스를 삭제했습니다 (되돌리기 가능)');
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- capture
+function flash() {
+  const f = $('flash');
+  f.classList.add('go');
+  requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('go')));
+}
+
+async function captureOne() {
+  const label = S.label;
+  const r = await api('/api/capture', { body: { label } });
+  flash();
+  applySummary(r.summary);
+  if (label === S.label) {
+    S.images.unshift(r);
+    const g = $('gallery');
+    if (g.querySelector('.empty')) g.textContent = '';
+    g.prepend(thumb(r, true));
+  }
+  $('last').textContent = `${r.file} · ${r.width}×${r.height} · ${(r.bytes / 1024).toFixed(1)} KB · ${r.ms} ms`;
+  return r;
+}
+
+async function shot() {
+  if (!S.label || S.bursting) return;
+  $('shot').disabled = true;
+  try { await captureOne(); } catch (e) { toast(e.message, true); }
+  $('shot').disabled = false;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function burst() {
+  if (S.bursting) { S.stopBurst = true; return; }
+  if (!S.label) return;
+  const n = Math.max(2, Math.min(500, +$('burstCount').value || 20));
+  const gap = Math.max(0, Math.min(5000, +$('burstGap').value || 0));
+  S.bursting = true; S.stopBurst = false;
+  $('burst').innerHTML = '중지 <kbd>Esc</kbd>';
+  $('burst').classList.add('danger');
+  renderClasses();
+  let ok = 0, fail = 0;
+  for (let i = 0; i < n && !S.stopBurst; i++) {
+    const t0 = performance.now();
+    try { await captureOne(); ok++; } catch (e) { fail++; if (fail >= 3) { toast(e.message, true); break; } }
+    $('prog').style.width = ((i + 1) / n * 100) + '%';
+    $('burstState').textContent = `${i + 1} / ${n}`;
+    const wait = gap - (performance.now() - t0);
+    if (wait > 0 && i < n - 1) await sleep(wait);
+  }
+  S.bursting = false;
+  $('burst').innerHTML = '연속 촬영 <kbd>B</kbd>';
+  $('burst').classList.remove('danger');
+  $('burstState').textContent = `${ok}장 저장` + (fail ? `, 실패 ${fail}` : '') + (S.stopBurst ? ' (중지)' : '');
+  setTimeout(() => { if (!S.bursting) $('prog').style.width = '0'; }, 800);
+  renderClasses();
+}
+
+// ---------- delete / undo
+async function deleteFiles(files) {
+  if (!files.length) return;
+  try {
+    const r = await api('/api/delete', { body: { items: files.map(file => ({ label: S.label, file })) } });
+    const gone = new Set(files);
+    S.images = S.images.filter(i => !gone.has(i.file));
+    files.forEach(f => S.sel.delete(f));
+    applySummary(r.summary);
+    renderGallery();
+    if (r.failed) {
+      toast(`${r.failed}장은 사용 중이라 지우지 못했습니다. 다시 시도하세요`, true);
+      await loadImages();
+    }
+    if (r.deleted) toast(`${r.deleted}장 삭제 · Ctrl+Z로 되돌리기`);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function undo() {
+  try {
+    const r = await api('/api/undo', { body: {} });
+    applySummary(r.summary);
+    await loadImages();
+    toast(`${r.restored}장 복원`);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- preview
+function openPreview(img) {
+  $('previewImg').src = img.url;
+  $('previewCap').textContent = `${img.file} · ${(img.bytes / 1024).toFixed(1)} KB  —  아무 곳이나 누르면 닫힘`;
+  $('preview').classList.add('show');
+}
+
+// ---------- board / camera
+function streamUrl() { return `http://${S.board}:81/stream`; }
+
+function setStream(on) {
+  S.streamOn = on;
+  $('streamToggle').textContent = on ? '영상 끄기' : '영상 켜기';
+  const img = $('stream');
+  if (on) {
+    $('streamMsg').textContent = '영상 연결 중…';
+    $('streamMsg').hidden = false;
+    img.src = streamUrl() + '?t=' + Date.now();
+  } else {
+    img.removeAttribute('src');
+    $('streamMsg').textContent = '영상 꺼짐 (촬영은 계속 가능)';
+    $('streamMsg').hidden = false;
+  }
+}
+
+$('stream').onload = () => { $('streamMsg').hidden = true; };
+$('stream').onerror = () => {
+  if (!S.streamOn) return;
+  $('streamMsg').textContent = '영상 연결 실패 — 보드 전원·주소를 확인하세요. 시청자가 3명이면 다른 창을 닫으세요.';
+  $('streamMsg').hidden = false;
+  setTimeout(() => { if (S.streamOn && !$('streamMsg').hidden) $('stream').src = streamUrl() + '?t=' + Date.now(); }, 3000);
+};
+
+const SIZE_NAMES = { 0: '96×96', 1: '160×120', 2: '128×128', 3: '176×144', 4: '240×176', 5: '240×240',
+                     6: '320×240', 7: '400×296', 8: '480×320', 9: '640×480', 10: '800×600', 11: '1024×768', 12: '1280×1024', 13: '1280×720' };
+
+async function pollBoard() {
+  try {
+    const s = await api('/api/board/status');
+    const first = !S.cam;
+    S.cam = s;
+    $('dot').className = 'dot ' + (s.camera ? 'on' : 'off');
+    $('boardInfo').textContent = s.camera
+      ? `${s.ip} · ${SIZE_NAMES[s.framesize] || s.framesize} · Wi-Fi ${s.rssi} dBm · 시청 ${s.viewers}`
+      : `${s.ip} · 카메라 없음 (PSRAM=opi로 빌드했는지 확인)`;
+    const b = $('badge');
+    b.hidden = false; b.textContent = SIZE_NAMES[s.framesize] || '';
+    if (document.activeElement !== $('size')) $('size').value = String(s.framesize);
+    if (document.activeElement !== $('quality') && [...$('quality').options].some(o => o.value == s.quality)) $('quality').value = String(s.quality);
+    if (first && S.streamOn && !$('streamMsg').hidden) setStream(true);
+  } catch (e) {
+    S.cam = null;
+    $('dot').className = 'dot off';
+    $('boardInfo').textContent = '보드 응답 없음';
+  }
+}
+
+async function setCamera(body) {
+  try {
+    await api('/api/board/camera', { body });
+    await pollBoard();
+    toast('카메라 설정 변경');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function saveBoard() {
+  try {
+    applySummary(await api('/api/board', { body: { host: $('boardHost').value.trim() } }));
+    S.cam = null;
+    await pollBoard();
+    if (S.streamOn) setStream(true);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- wiring
+$('addClass').onclick = addClass;
+$('newClass').onkeydown = (e) => { if (e.key === 'Enter') addClass(); };
+$('shot').onclick = shot;
+$('burst').onclick = burst;
+$('selAll').onclick = () => {
+  if (S.sel.size === S.images.length) S.sel.clear(); else S.images.forEach(i => S.sel.add(i.file));
+  renderGallery();
+};
+$('delSel').onclick = () => deleteFiles([...S.sel]);
+$('undo').onclick = undo;
+$('dlClass').onclick = () => { location.href = '/api/download?label=' + encodeURIComponent(S.label); };
+$('dlAll').onclick = () => { location.href = '/api/download?label=all'; };
+$('delClass').onclick = (e) => armed(e.currentTarget, '클래스 삭제', deleteClass);
+$('streamToggle').onclick = () => setStream(!S.streamOn);
+$('size').onchange = () => setCamera({ size: +$('size').value });
+$('quality').onchange = () => setCamera({ quality: +$('quality').value });
+$('boardSave').onclick = saveBoard;
+$('boardHost').onkeydown = (e) => { if (e.key === 'Enter') saveBoard(); };
+$('preview').onclick = () => $('preview').classList.remove('show');
+
+document.addEventListener('keydown', (e) => {
+  if (e.target instanceof Element && e.target.matches('input, select, textarea')) return;
+  if (e.key === 'Escape') {
+    if ($('preview').classList.contains('show')) $('preview').classList.remove('show');
+    else if (S.bursting) S.stopBurst = true;
+    else if (S.sel.size) { S.sel.clear(); renderGallery(); }
+    return;
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); if (S.undo) undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === 'Space') { e.preventDefault(); shot(); }
+  else if (e.key.toLowerCase() === 'b') burst();
+  else if (e.key === 'Delete' || e.key === 'Backspace') { if (S.sel.size) { e.preventDefault(); deleteFiles([...S.sel]); } }
+  else if (/^[1-9]$/.test(e.key)) { const c = S.classes[+e.key - 1]; if (c) selectClass(c.name); }
+});
+
+(async () => {
+  try { await refresh(); } catch (e) { toast('수집 서버에 연결하지 못했습니다: ' + e.message, true); }
+  setStream(true);
+  pollBoard();
+  setInterval(pollBoard, 2000);
+  setInterval(async () => { if (!S.bursting) try { applySummary(await api('/api/state')); } catch (e) {} }, 5000);
+})();
+</script>
+</body>
+</html>

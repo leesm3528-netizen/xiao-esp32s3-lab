@@ -9,3 +9,10 @@ WIFI.md
 # build output
 build/
 *.bin
+
+# Edge Impulse (API key, collected photos, local settings)
+.env
+EICollector/dataset/
+EICollector/exports/
+EICollector/config.json
+__pycache__/
