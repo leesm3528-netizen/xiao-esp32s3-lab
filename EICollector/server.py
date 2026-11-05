@@ -205,7 +205,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": e.message}, e.code)
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
-        except Exception as e:  # reply with JSON instead of dropping the connection
+        except Exception as e:  # noqa: BLE001 -- last resort: reply with JSON instead of dropping the connection
             self.log_error("%s %s failed: %r", method, path, e)
             try:
                 self.send_json({"error": f"서버 오류: {e}"}, 500)

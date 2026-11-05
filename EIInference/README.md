@@ -20,6 +20,11 @@ arduino-cli config set library.enable_unsafe_install true
 arduino-cli lib install --zip-path EIModel/ei-mint-waterbottle-arduino-v1.zip
 ```
 
+**설치 후 라이브러리 두 곳을 고쳐야 한다.** 그대로 두면 부팅 직후 오류로 재부팅을 반복한다.
+
+1. `src/edge-impulse-sdk/porting/ei_classifier_porting.h`에서 `CONFIG_IDF_TARGET_ESP32S3`의 `EI_MAX_OVERFLOW_BUFFER_COUNT`를 `30`에서 `100`으로 바꾼다. ESP-NN이 층마다 버퍼를 따로 받아서 30개를 넘긴다(`ERR: Failed to allocate persistent buffer ... EI_MAX_OVERFLOW_BUFFER_COUNT`).
+2. `src/tflite-model/tflite_learn_1156909_3_compiled.cpp`의 `AllocatePersistentBufferImpl`에서 `ptr = ei_calloc(bytes, 1);`을 `ptr = ei_malloc(bytes);`로 바꾸고, NULL 검사 뒤에 `memset(ptr, 0, bytes);`를 넣는다. S3 SIMD는 16바이트 정렬이 필요한데 `calloc`은 정렬되지 않아 `CORRUPT HEAP`이 났다.
+
 `secrets.h`에 와이파이 정보를 넣는다(`secrets.example.h` 참고, gitignore).
 
 ## 빌드·업로드

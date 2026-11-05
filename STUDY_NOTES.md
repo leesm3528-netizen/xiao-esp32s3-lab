@@ -13,6 +13,7 @@
 7. [연결 방식 비교](#7-연결-방식-비교)
 8. [AI 에이전트와 작업하며 배운 것](#8-ai-에이전트와-작업하며-배운-것)
 9. [MQTT (로컬 브로커)](#9-mqtt-로컬-브로커)
+10. [Edge Impulse: 보드에서 추론하기](#10-edge-impulse-보드에서-추론하기)
 
 ---
 
@@ -345,3 +346,76 @@ WiFi.setSleep(false);       // 와이파이 절전 끄기 (명령 수신 지연 
 | 휴대폰 동시 접속 | 여러 대 |
 | 지연 | 짧음 (1초 안) |
 | 특징 | 기기끼리 직접 연결하지 않아서 기기를 늘리기 쉽다. 브로커가 꺼지면 전부 멈춘다 |
+
+---
+
+## 10. Edge Impulse: 보드에서 추론하기
+
+### 흐름
+
+```text
+카메라 JPEG 240×240 ─┬─> :81/stream, /capture (영상)
+                     └─> 추론 작업(코어 1, 0.2초마다)
+                           JPEG → RGB888 → 96×96 → run_classifier()
+                             └─> /api/result, 웹 페이지, 시리얼, LED
+```
+
+PC나 클라우드로 사진을 보내지 않고 **보드 칩이 직접** 분류합니다(온디바이스 추론). 시리얼에는 이렇게 나옵니다.
+
+```text
+#20 WaterBottle 0.92 | Mint 0.08 WaterBottle 0.92 | dsp 5 nn 84 total 185 ms
+```
+
+| 단계 | 시간 |
+| --- | --- |
+| 전처리(dsp) | 약 5ms |
+| 신경망(nn) | 약 84ms |
+| 전체 (JPEG 풀기 포함) | 약 185ms |
+
+### 컴파일이 오래 걸린 이유
+
+Edge Impulse 라이브러리에는 신경망 실행 엔진(TensorFlow Lite Micro, CMSIS-DSP 등) 소스가 **848개** 들어 있습니다. 처음 한 번은 전부 컴파일해야 해서 오래 걸리고, 동시에 많이 돌리면 PC 메모리가 부족해 중단됩니다. `--jobs 2`로 동시 컴파일 수를 줄여서 끝냈습니다. 그다음부터는 바뀐 파일만 다시 컴파일합니다.
+
+### 업로드 후 재부팅이 반복된 이유
+
+라이브러리 코드는 그대로 두면 이 보드에서 모델을 준비하다 죽었습니다. 원인이 두 가지였습니다.
+
+#### 1) 추가 버퍼 개수 제한
+
+모델은 미리 계산된 크기의 메모리(텐서 아레나) 안에서 돕니다. 그런데 ESP32-S3용 가속 라이브러리(**ESP-NN**)는 층마다 작업용 버퍼를 따로 요청하고, 아레나에 자리가 없으면 힙에서 따로 받습니다. 라이브러리는 이 "따로 받기"를 ESP32-S3에서 **30번**까지만 허용했습니다.
+
+할당 함수에 로그를 넣어 보니 요청이 수십 개(20~40KB짜리 포함)였고, 30번째에서 실패했습니다. 아레나만 64KB 키워서는 해결되지 않아서 제한을 100으로 올렸습니다.
+
+```c
+// edge-impulse-sdk/porting/ei_classifier_porting.h
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+#define EI_MAX_OVERFLOW_BUFFER_COUNT 100   // 원래 30
+#endif
+```
+
+#### 2) 메모리 정렬 (16바이트)
+
+그다음에는 `CORRUPT HEAP: Bad head ...`로 죽었습니다. ESP32-S3의 SIMD(한 번에 여러 숫자를 계산하는 명령)는 **16바이트 단위로 맞춘 주소**를 전제로 합니다. 따로 받은 버퍼는 `calloc`으로 받아서 정렬이 보장되지 않았고, SIMD가 주소를 16의 배수로 내려 맞춰 쓰면서 **버퍼 바로 앞의 힙 관리 정보**를 덮어썼습니다. 그 버퍼를 해제할 때 힙이 깨진 것이 발견됐습니다.
+
+```c
+// tflite-model/tflite_learn_..._compiled.cpp, AllocatePersistentBufferImpl
+ptr = ei_malloc(bytes);        // ESP32 포팅: heap_caps_aligned_alloc(16, ...)
+if (ptr == NULL) { ... }
+memset(ptr, 0, bytes);         // calloc처럼 0으로 채움
+```
+
+> 이 두 곳은 설치된 라이브러리를 직접 고친 것이라 라이브러리를 다시 설치하면 사라집니다. 다시 적용하는 방법은 [EIInference/README](EIInference/README.md)에 있습니다.
+
+### 백트레이스 읽기
+
+`Guru Meditation Error`가 나면 시리얼에 `Backtrace: 0x4200...` 주소가 찍힙니다. 빌드 폴더의 `.elf`와 `addr2line`으로 어느 함수였는지 바로 알 수 있습니다.
+
+```bash
+xtensa-esp-elf-addr2line -pfiaC -e EIInference.ino.elf 0x420097b5 0x4200d679 ...
+# ei_free ← tflite_learn_..._reset ← run_classifier ← inferTask (EIInference.ino:92)
+```
+
+### 알아 둘 점
+
+- `background`(아무것도 아님) 클래스가 없어서 빈 화면도 민트나 물병 중 하나로 판정합니다(점수가 0.5~0.7 근처). 다음에 모델을 다시 학습할 때 배경 사진을 넣으면 좋습니다.
+- 펌웨어는 한 번에 하나만 올라갑니다. 추론 펌웨어를 올리면 Supabase 원격 대시보드는 멈춥니다.

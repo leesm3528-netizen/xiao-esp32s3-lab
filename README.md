@@ -1,7 +1,7 @@
 # XIAO ESP32-S3 Lab
 
 Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고, 같은 기능을 **Wi-Fi 웹서버 → 클라우드(Supabase) 원격 제어 → 카메라 스트리밍 → AP 모드 → BLE → MQTT** 순서로 연결 방식을 바꿔 가며 스마트폰에서 제어해 본 학습 기록입니다.
-3일차에는 카메라로 사진을 모아 **Edge Impulse**로 이미지 분류 모델(민트 / 물병)을 학습했습니다.
+3일차에는 카메라로 사진을 모아 **Edge Impulse**로 이미지 분류 모델(민트 / 물병)을 학습하고, 보드가 직접 카메라 영상을 분류하게 했습니다(추론 약 185ms).
 코드는 AI 코딩 에이전트(Claude Code)와 함께 작성했고, `arduino-cli`로 노트북에서 보드에 바로 업로드했습니다.
 
 ![ESP32](https://img.shields.io/badge/ESP32--S3-E7352C?style=flat-square&logo=espressif&logoColor=white)
@@ -87,6 +87,8 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | **Edge Impulse REST API** | 브라우저 없이 API 키로 업로드 → 특징 추출 → 학습 → Arduino 라이브러리 빌드까지 스크립트로 | [EIModel/scripts](EIModel/scripts/) |
 | **int8 양자화** | 보드에서 빠르게 돌리려고 가중치를 8비트로 줄인다. 모델에 따라 정확도가 크게 떨어질 수 있어서 int8 점수로 모델을 골랐다 | [EIModel](EIModel/README.md) |
 | **전처리 맞추기** | 학습 사진과 같은 240×240 JPEG를 RGB로 풀고 96×96으로 줄여 모델에 넣는다 | [EIInference](EIInference/EIInference.ino) |
+| **온디바이스 추론** | PC·클라우드 없이 보드 칩이 직접 분류. ESP32-S3의 SIMD 가속(ESP-NN)으로 신경망 약 84ms, 전체 약 185ms | [EIInference](EIInference/README.md) |
+| **메모리 정렬** | SIMD 명령은 16바이트 단위로 맞춘 주소만 제대로 다룬다. 정렬 안 된 버퍼를 주면 앞쪽 메모리를 덮어써 힙이 깨진다 | [STUDY_NOTES](STUDY_NOTES.md#10-edge-impulse-보드에서-추론하기) |
 
 ### MQTT
 
@@ -126,7 +128,8 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 13. **사진 수집 대시보드** — 카메라 전용 펌웨어(`EICamera`)와 PC 수집 서버(`EICollector`)로 클래스별 촬영·연속 촬영·삭제·ZIP 다운로드를 만들었습니다. 민트 100장, 물병 101장을 모았습니다.
 14. **모델 학습** — `.env`의 API 키로 Edge Impulse에 업로드하고 학습했습니다. MobileNetV2는 int8로 바꾸면 정확도가 76~88%로 떨어져서, int8에서도 점수가 유지되는 MobileNetV1 0.25를 골랐습니다. 테스트 정확도 90%(40장 중 36장).
 15. **원격 대시보드 복구** — 외부 대시보드가 "오프라인"이었던 원인은 보드에 수집 펌웨어가 올라가 있었기 때문이었습니다. 운영 펌웨어를 다시 올려 LED 원격 제어를 확인했습니다.
-16. **추론 펌웨어 작성** — 보드에서 분류하고 웹 페이지·시리얼·LED로 결과를 보여 주는 `EIInference`를 작성했습니다. **컴파일·업로드는 아직 확인 전입니다**(SDK 첫 컴파일이 오래 걸리고 PC 메모리가 부족해 중단).
+16. **추론 펌웨어 작성** — 보드에서 분류하고 웹 페이지·시리얼·LED로 결과를 보여 주는 `EIInference`를 작성했습니다.
+17. **추론 펌웨어 업로드** — `--jobs 2`로 동시 컴파일 수를 줄여 SDK 첫 컴파일(파일 848개)을 끝냈습니다. 업로드 직후 모델 준비 단계에서 재부팅이 반복되어, 시리얼 로그와 디버그 출력으로 원인을 좁혀 Edge Impulse 라이브러리 두 곳을 고쳤습니다(아래 트러블슈팅). 이제 <http://192.168.0.25/> 에서 영상과 분류 결과가 0.2초마다 나옵니다.
 
 <!-- markdownlint-enable MD029 -->
 
@@ -148,6 +151,8 @@ Seeed **XIAO ESP32-S3 Sense** 보드 하나로 LED와 터치센서를 다루고,
 | (EI) 사진을 지웠는데 휴지통에 복사본이 남고 원본도 그대로 | Windows에서 브라우저가 읽는 중인 파일을 `shutil.move`하면 복사로 바뀌고 원본 삭제는 실패 | `os.replace` 재시도만 쓰고, 실패한 장수는 화면에 알림 |
 | (EI) MobileNetV2가 float32 100%인데 보드용 int8은 76% | 양자화로 정확도가 크게 떨어짐 | Dense 층 제거(88%) → MobileNetV1 0.25로 교체(int8 = float32 = 90.9%) |
 | (EI) 원격 대시보드가 "오프라인" | 수집 펌웨어(`EICamera`)가 운영 펌웨어를 덮어써서 클라우드 접속이 멈춤 | `SupabaseDashboard` 재업로드. 펌웨어는 한 번에 하나만 올라간다 |
+| (EI) 업로드 후 `ERR: Failed to allocate persistent buffer ... EI_MAX_OVERFLOW_BUFFER_COUNT` → 재부팅 반복 | ESP-NN 가속 커널이 층마다 버퍼를 따로 요청(20~40KB짜리 포함 수십 개). 라이브러리는 텐서 아레나 밖 추가 할당을 ESP32-S3에서 **30개**까지만 허용 | `ei_classifier_porting.h`의 `EI_MAX_OVERFLOW_BUFFER_COUNT`를 100으로. 아레나만 64KB 늘려서는 해결되지 않았다 |
+| (EI) 그다음 `CORRUPT HEAP: Bad head ...` → 재부팅 반복 | 추가 버퍼를 `calloc`으로 받아 **16바이트 정렬이 안 됨**. S3 SIMD 명령이 정렬된 주소로 내려 써서 버퍼 앞의 힙 헤더를 덮어씀 | 모델 `.cpp`에서 `ei_calloc` 대신 정렬된 `ei_malloc`(`heap_caps_aligned_alloc(16, …)`) + `memset`. 방법은 [EIInference/README](EIInference/README.md) |
 | (MQTT) 대시보드 페이지가 갑자기 안 열림 | 브로커·웹 서버를 띄운 창이 닫히거나 메모리 부족으로 종료 | `start-all.ps1`로 다시 실행하고 두 창을 열어 둔다 |
 
 ---

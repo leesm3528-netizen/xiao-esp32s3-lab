@@ -6,9 +6,8 @@ Settings are the ones that gave the v1 model (MobileNetV1 0.25, int8 = float32 a
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from ei import req  # noqa: E402
-from job import P, wait  # noqa: E402
+from ei import req
+from job import P, wait
 
 OUT = pathlib.Path(__file__).resolve().parents[1]
 
